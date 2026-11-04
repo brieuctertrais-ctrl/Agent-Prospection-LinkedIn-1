@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head><body>
+<!-- Minimal fixture reproducing the LinkedIn profile markup the selectors target. -->
+<main>
+  <section class="artdeco-card">
+    <img class="pv-top-card-profile-picture__image--show" src="https://media.licdn.com/p.jpg" width="200" height="200">
+    <h1>Sami Benali</h1>
+    <div class="text-body-medium break-words">Business Developer chez CashNow</div>
+    <span class="text-body-small inline t-black--light break-words">Paris, Île-de-France, France</span>
+    <span class="dist-value">2e</span>
+    <button aria-label="Entreprise actuelle : CashNow">CashNow</button>
+    <div id="actions">
+      <button aria-label="Invitez Sami Benali à rejoindre votre réseau">Se connecter</button>
+    </div>
+  </section>
+  <section><div id="about"></div>
+    <div class="inline-show-more-text"><span aria-hidden="true">Je développe le portefeuille clients de CashNow, solution d'affacturage pour PME.</span></div>
+  </section>
+  <section><div id="experience"></div>
+    <ul>
+      <li class="artdeco-list__item"><span aria-hidden="true">Business Developer</span><span aria-hidden="true">CashNow · CDI</span><span aria-hidden="true">janv. 2024 - aujourd’hui</span><span aria-hidden="true">Prospection outbound et signature de nouveaux comptes PME sur toute la France.</span></li>
+      <li class="artdeco-list__item"><span aria-hidden="true">SDR</span><span aria-hidden="true">Acme</span><span aria-hidden="true">2022 - 2023</span></li>
+    </ul>
+  </section>
+</main>
+<script>
+  // Simulated connect flow: dialog → add note → textarea → send → pending.
+  document.querySelector('#actions button').addEventListener('click', () => {
+    const d = document.createElement('div');
+    d.setAttribute('role', 'dialog');
+    d.innerHTML = '<button aria-label="Ajouter une note">Ajouter une note</button>';
+    document.body.appendChild(d);
+    d.querySelector('button').addEventListener('click', () => {
+      d.innerHTML = '<textarea name="message"></textarea><button aria-label="Envoyer l’invitation" disabled>Envoyer</button>';
+      const ta = d.querySelector('textarea'); const send = d.querySelectorAll('button')[0];
+      ta.addEventListener('input', () => { send.disabled = !ta.value; window.__note = ta.value; });
+      send.addEventListener('click', () => {
+        d.remove();
+        document.querySelector('#actions').innerHTML = '<button aria-label="En attente, cliquez pour retirer l’invitation">En attente</button>';
+      });
+    });
+  });
+</script>
+</body></html>

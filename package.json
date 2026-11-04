@@ -1,0 +1,20 @@
+{
+  "name": "kairo-bizdev",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @kairo/web",
+    "build:web": "npm run build -w @kairo/web",
+    "dev:ext": "npm run dev -w @kairo/extension",
+    "build:ext": "npm run build -w @kairo/extension",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "overrides": {
+    "@supabase/supabase-js": "2.118.0"
+  }
+}

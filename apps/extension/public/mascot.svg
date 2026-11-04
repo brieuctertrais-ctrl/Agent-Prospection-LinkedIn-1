@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Mascotte">
+  <circle cx="64" cy="64" r="64" fill="#2A2F55"/>
+  <clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath>
+  <g clip-path="url(#c)">
+    <!-- turtleneck sweater -->
+    <path d="M18 128c2-26 20-38 46-38s44 12 46 38z" fill="#2E8B57"/>
+    <path d="M48 84h32v14c-5 4-11 6-16 6s-11-2-16-6z" fill="#3BA56A"/>
+    <path d="M48 90c5 3 11 4 16 4s11-1 16-4" stroke="#24744A" stroke-width="2" fill="none"/>
+    <!-- neck -->
+    <rect x="55" y="72" width="18" height="14" rx="6" fill="#E8B48F"/>
+    <!-- head -->
+    <ellipse cx="64" cy="54" rx="24" ry="27" fill="#F2C29C"/>
+    <ellipse cx="40" cy="57" rx="4" ry="6" fill="#E8B48F"/>
+    <ellipse cx="88" cy="57" rx="4" ry="6" fill="#E8B48F"/>
+    <!-- hair -->
+    <path d="M39 50c-2-18 10-30 27-30 15 0 26 9 25 26-6-7-13-10-22-11-8 6-19 9-30 15z" fill="#3B2A20"/>
+    <!-- eyes -->
+    <ellipse cx="55" cy="56" rx="3" ry="3.4" fill="#1F2340"/>
+    <ellipse cx="73" cy="56" rx="3" ry="3.4" fill="#1F2340"/>
+    <path d="M50 48q5-3 10 0M68 48q5-3 10 0" stroke="#3B2A20" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+    <!-- smile -->
+    <path d="M55 67q9 8 18 0" stroke="#A0522D" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <circle cx="49" cy="64" r="3.5" fill="#F09A8A" opacity=".5"/>
+    <circle cx="79" cy="64" r="3.5" fill="#F09A8A" opacity=".5"/>
+  </g>
+</svg>

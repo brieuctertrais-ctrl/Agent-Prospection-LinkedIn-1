@@ -1,0 +1,69 @@
+import { requireUser } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { deleteProspectingData, saveSettings } from "./actions";
+
+const FIELDS = [
+  ["daily_profile_views", "Profils consultés / jour"],
+  ["daily_invitations", "Invitations / jour"],
+  ["weekly_invitations", "Invitations / semaine"],
+  ["daily_messages", "Messages / jour"],
+  ["min_match_score", "Score minimum de correspondance (0-100)"],
+  ["work_start_hour", "Début de plage horaire (h)"],
+  ["work_end_hour", "Fin de plage horaire (h)"],
+] as const;
+
+export default async function SettingsPage() {
+  const { supabase, user } = await requireUser();
+  const { t, locale } = await getT();
+  const [{ data: s }, { data: sub }] = await Promise.all([
+    supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
+    supabase.from("subscriptions").select("plan, status, trial_ends_at").eq("user_id", user.id).single(),
+  ]);
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <h1 className="text-3xl font-bold">{t("settings.title")}</h1>
+      {sub && (
+        <Card className="p-5 text-sm">
+          Offre : <b className="text-gold">{sub.plan}</b>
+          {sub.plan === "trial" && <> — essai jusqu&apos;au {new Date(sub.trial_ends_at).toLocaleDateString("fr-FR")}</>}
+        </Card>
+      )}
+      <Card>
+        <form action={saveSettings} className="space-y-5">
+          <div>
+            <Label htmlFor="locale">{t("settings.language")}</Label>
+            <Select id="locale" name="locale" defaultValue={locale}>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+            </Select>
+          </div>
+          <CardTitle className="mb-0 mt-4">{t("settings.quotas")}</CardTitle>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {FIELDS.map(([k, label]) => (
+              <div key={k}>
+                <Label htmlFor={k}>{label}</Label>
+                <Input id={k} name={k} type="number" defaultValue={s?.[k]} />
+              </div>
+            ))}
+            <div>
+              <Label htmlFor="timezone">Fuseau horaire</Label>
+              <Input id="timezone" name="timezone" defaultValue={s?.timezone} />
+            </div>
+          </div>
+          <Button type="submit">{t("common.save")}</Button>
+        </form>
+      </Card>
+      <Card className="border-red-500/20">
+        <form action={deleteProspectingData}>
+          <Button variant="destructive" type="submit">{t("settings.deleteData")}</Button>
+        </form>
+      </Card>
+    </div>
+  );
+}

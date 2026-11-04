@@ -1,0 +1,15 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./sidepanel.html", "./src/**/*.{ts,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        navy: { DEFAULT: "#1F2340", light: "#2A2F55", lighter: "#363C69", dark: "#161931" },
+        gold: { DEFAULT: "#F5C451", dark: "#E0AE35" },
+        cream: "#FFF6DC",
+      },
+      fontFamily: { display: ["'Bebas Neue'", "Impact", "sans-serif"] },
+    },
+  },
+  plugins: [],
+};
