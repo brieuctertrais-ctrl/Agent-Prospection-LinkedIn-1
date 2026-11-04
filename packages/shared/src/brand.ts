@@ -2,8 +2,8 @@
  * Product branding. Change PRODUCT_NAME here to rename the product everywhere
  * (web app, extension, AI prompts).
  */
-export const PRODUCT_NAME = "KAIRO";
-export const PRODUCT_TAGLINE = "BIZDEV";
+export const PRODUCT_NAME = "EFI";
+export const PRODUCT_TAGLINE = "PROSPECTION";
 
 export const COLORS = {
   navy: "#1F2340",

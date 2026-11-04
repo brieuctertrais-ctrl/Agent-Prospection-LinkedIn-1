@@ -1,12 +1,14 @@
-# KAIRO BizDev — assistant IA de prospection LinkedIn
+# EFI Prospection — assistant IA de prospection LinkedIn
 
 « Le Tinder de la prospection » : l'assistant fait défiler des profils LinkedIn qui
 correspondent à ton Buyer Persona, tu valides (✓) ou passes (✗), et pour chaque profil
 validé l'IA rédige une note d'invitation ultra-personnalisée (≤ 300 caractères) que
 l'extension envoie depuis **ton** onglet LinkedIn.
 
-> Le nom du produit est un placeholder : change `PRODUCT_NAME` dans
-> `packages/shared/src/brand.ts` (et le `name` du `manifest.json` de l'extension).
+> Pour démarrer pas à pas (création des comptes, lancement en local, test sur LinkedIn) :
+> **[`docs/DEMARRAGE.md`](docs/DEMARRAGE.md)**.
+>
+> Le nom affiché se règle dans `packages/shared/src/brand.ts` (et le `name` du `manifest.json` de l'extension).
 
 ## Architecture
 

@@ -1,5 +1,5 @@
 -- =============================================================
--- KAIRO BizDev — initial schema
+-- EFI Prospection — initial schema
 -- Every table is scoped per user with Row Level Security.
 -- =============================================================
 
