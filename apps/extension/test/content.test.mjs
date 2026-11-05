@@ -18,6 +18,7 @@ const html = readFileSync(new URL("./profile.html", import.meta.url), "utf8");
 
 test("scrape profile and send invitation on fixture", { timeout: 60000 }, async () => {
   const browser = await chromium.launch();
+  try {
   const page = await browser.newPage();
   await page.route("**/*", (r) => r.abort()); // no network: only the fixture is served
   await page.route("https://www.linkedin.com/in/sami-benali/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: html }));
@@ -38,5 +39,35 @@ test("scrape profile and send invitation on fixture", { timeout: 60000 }, async 
   const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
   assert.deepEqual(res, { ok: true });
   assert.equal(await page.evaluate(() => window.__note), note);
-  await browser.close();
+  } finally {
+    await browser.close();
+  }
+});
+
+test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another profile's button", { timeout: 60000 }, async () => {
+  const fixture = readFileSync(new URL("./profile-new-ui.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+  const page = await browser.newPage();
+  await page.route("**/*", (r) => r.abort());
+  await page.route("https://www.linkedin.com/in/francois-mathon/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: fixture }));
+  await page.goto("https://www.linkedin.com/in/francois-mathon/", { waitUntil: "domcontentloaded" });
+  await page.addScriptTag({ content: code });
+
+  const profile = await page.evaluate(() => window.kairo.scrapeProfile());
+  assert.equal(profile.full_name, "François MATHON");
+  assert.equal(profile.first_name, "François");
+  assert.equal(profile.headline, "DIRECTEUR ADMINISTRATIF ET FINANCIER");
+  assert.equal(profile.location, "Lille, Hauts-de-France, France");
+  assert.equal(profile.connection_state, "none");
+  assert.equal(profile.photo_url, "https://media.licdn.com/dms/image/abc.jpg");
+
+  const note = "Bonjour François, test ?";
+  const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
+  assert.deepEqual(res, { ok: true });
+  assert.equal(await page.evaluate(() => window.__note), note);
+  assert.equal(await page.evaluate(() => window.__wrongClicked ?? false), false);
+  } finally {
+    await browser.close();
+  }
 });

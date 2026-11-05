@@ -1,6 +1,7 @@
 import { normalizeProfileUrl, type Experience, type ScrapedProfile } from "@kairo/shared";
 import { query, queryAll, text } from "./dom";
 import { SELECTORS } from "./selectors";
+import { findNameElement, findTopCard, linesAfterName, nameFromTitle } from "./topcard";
 
 function sectionByAnchor(key: "aboutSection" | "experienceSection" | "activitySection"): HTMLElement | null {
   const el = query<HTMLElement>(key);
@@ -50,36 +51,41 @@ function readActivity(): string[] {
     .map((t) => t.slice(0, 400));
 }
 
-function connectionState(): ScrapedProfile["connection_state"] {
-  if (query("pendingButton")) return "pending";
+function connectionState(card: HTMLElement | null): ScrapedProfile["connection_state"] {
+  if (query("pendingButton") || (card && /(^|\n)\s*(en attente|pending)\s*(\n|$)/i.test(card.innerText))) return "pending";
   const dist = text(query("distanceBadge"));
   if (/^1/.test(dist)) return "connected";
-  if (dist) return "none";
+  if (card && /(^|\n)\s*·?\s*1\s*(er|st)\b/i.test(card.innerText)) return "connected";
+  if (dist || card) return "none";
   return "unknown";
 }
 
 export function scrapeProfile(): ScrapedProfile | null {
   const url = normalizeProfileUrl(location.href);
   if (!url) return null;
-  const full_name = text(query("profileName"));
+  const titleName = nameFromTitle();
+  const nameEl = findNameElement(titleName);
+  const full_name = (text(nameEl) || titleName).split("\n")[0].trim();
   if (!full_name) return null;
+  const card = findTopCard(nameEl);
+  const fallback = linesAfterName(card, full_name);
 
   const experiences = readExperiences();
-  const companyFromButton = text(query("currentCompany"));
-  const photo = query<HTMLImageElement>("profilePhoto")?.src;
+  const companyFromButton = text(query("currentCompany")).replace(/^(entreprise actuelle|current company)\s*:?\s*/i, "");
+  const photo = query<HTMLImageElement>("profilePhoto")?.src ?? card?.querySelector<HTMLImageElement>("img[src*='licdn.com']")?.src;
 
   return {
     linkedin_url: url,
-    full_name,
+    full_name: full_name.slice(0, 200),
     first_name: full_name.split(/\s+/)[0] ?? "",
-    headline: text(query("profileHeadline")),
+    headline: text(query("profileHeadline")) || fallback.headline,
     company: companyFromButton || experiences[0]?.company || "",
-    location: text(query("profileLocation")),
+    location: text(query("profileLocation")) || fallback.location,
     about: readAbout(),
-    photo_url: photo && photo.startsWith("https://") ? photo : undefined,
+    photo_url: photo && /^https:\/\/[a-z0-9.-]+\.licdn\.com\//.test(photo) ? photo : undefined,
     experiences,
     recent_activity: readActivity(),
-    connection_state: connectionState(),
+    connection_state: connectionState(card),
   };
 }
 

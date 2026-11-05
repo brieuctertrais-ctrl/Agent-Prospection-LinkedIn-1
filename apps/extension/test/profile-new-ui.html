@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>(3) François MATHON | LinkedIn</title></head><body>
+<!-- Fixture: newer LinkedIn layout — no <main>, obfuscated classes, third-party badge,
+     connect as a link, and a suggested profile's connect button placed BEFORE the top card. -->
+<aside class="x9a1">
+  <div>Autres profils consultés</div>
+  <button aria-label="Invitez Paul DURAND à rejoindre votre réseau" id="wrong">Se connecter</button>
+</aside>
+<div class="a1b2c3">
+  <section class="q7w8">
+    <img src="https://media.licdn.com/dms/image/abc.jpg" width="200">
+    <div class="r5t6">
+      <h1 class="z1">François MATHON</h1><span class="lemlist-badge">Non ajouté à lemlist</span><span> · 2e</span>
+    </div>
+    <div class="u8i9">DIRECTEUR ADMINISTRATIF ET FINANCIER</div>
+    <div class="o0p1"><span>Lille, Hauts-de-France, France</span><span> · Coordonnées</span></div>
+    <div>500 ou + relations</div>
+    <div>Suivi par Matthieu</div>
+    <div id="actions">
+      <a href="/preload/custom-invite/?vanityName=francois-mathon" id="connect"><span>Se connecter</span></a>
+      <a href="#">Message</a>
+      <button>Plus</button>
+    </div>
+  </section>
+</div>
+<script>
+  document.getElementById('wrong').addEventListener('click', () => { window.__wrongClicked = true; });
+  document.getElementById('connect').addEventListener('click', (e) => {
+    e.preventDefault();
+    const d = document.createElement('div');
+    d.setAttribute('role', 'dialog');
+    d.innerHTML = '<button>Ajouter une note</button><button>Envoyer sans note</button>';
+    document.body.appendChild(d);
+    d.querySelector('button').addEventListener('click', () => {
+      d.innerHTML = '<textarea></textarea><button disabled>Envoyer</button>';
+      const ta = d.querySelector('textarea'); const send = d.querySelector('button');
+      ta.addEventListener('input', () => { send.disabled = !ta.value; window.__note = ta.value; });
+      send.addEventListener('click', () => {
+        d.remove();
+        document.getElementById('actions').innerHTML = '<button>En attente</button><a href="#">Message</a>';
+      });
+    });
+  });
+</script>
+</body></html>

@@ -2,6 +2,7 @@ import type { ContentRequest, ContentResponse } from "../lib/protocol";
 import { scrapeProfile, scrapeSearchResults } from "../linkedin/scraper";
 import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
+import { diagnose } from "../linkedin/topcard";
 
 async function handle(req: ContentRequest): Promise<ContentResponse> {
   switch (req.type) {
@@ -21,7 +22,7 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
       const profile = scrapeProfile();
-      return profile ? { ok: true, type: "PROFILE", profile } : { ok: false, code: "ui_changed", detail: "profile" };
+      return profile ? { ok: true, type: "PROFILE", profile } : { ok: false, code: "ui_changed", detail: diagnose() };
     }
     case "SCRAPE_SEARCH_RESULTS": {
       const w = detectAccountWarning();
@@ -35,7 +36,9 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
     }
     case "SEND_INVITATION": {
       const r = await sendInvitation(req.note);
-      return r.ok ? { ok: true, type: "INVITATION_SENT" } : { ok: false, code: r.code, detail: r.detail };
+      if (r.ok) return { ok: true, type: "INVITATION_SENT" };
+      const structural = ["ui_changed", "connect_not_found", "note_not_found", "textarea_not_found", "send_not_found", "not_pending"];
+      return { ok: false, code: r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
   }
 }
