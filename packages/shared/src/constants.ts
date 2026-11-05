@@ -51,8 +51,8 @@ export const LOCATIONS: { label: string; geoUrn?: string }[] = [
   { label: "Madrid" },
 ];
 
-export const MAX_JOB_TITLES = 5;
-export const MAX_KEYWORDS = 5;
+export const MAX_JOB_TITLES = 10;
+export const MAX_KEYWORDS = 10;
 export const INVITATION_MAX_CHARS = 300;
 export const INVITATION_TARGET_MIN = 220;
 export const INVITATION_TARGET_MAX = 280;

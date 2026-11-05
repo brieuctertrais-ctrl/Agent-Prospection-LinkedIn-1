@@ -124,3 +124,13 @@ insert into campaigns (user_id, persona_id, status) values (auth.uid(), '1000000
 select pg_temp.expect_error($$insert into campaigns (user_id, persona_id, status) values (auth.uid(), '10000000-0000-0000-0000-00000000000a', 'running')$$, 'only one running campaign per account');
 reset role;
 \echo ALL AUTOPILOT TESTS PASSED
+
+-- ===== Persona limits (10 titles / 10 keywords) =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+insert into personas (user_id, name, job_titles, keywords)
+  values (auth.uid(), 'Dix', array['a','b','c','d','e','f','g','h','i','j'], array['1','2','3','4','5','6','7','8','9','10']);
+select pg_temp.expect_error($$insert into personas (user_id, name, job_titles) values (auth.uid(), 'Onze', array['a','b','c','d','e','f','g','h','i','j','k'])$$, '11 job titles rejected');
+reset role;
+\echo ALL PERSONA LIMIT TESTS PASSED
