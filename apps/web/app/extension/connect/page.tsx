@@ -10,7 +10,16 @@ export default async function ConnectPage() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6 rounded-2xl bg-navy-light p-8 text-center">
         <div className="flex justify-center"><Logo /></div>
-        <ConnectExtension labels={{ connect: t("ext.connect"), ok: t("ext.connected"), ko: t("ext.notInstalled") }} />
+        <ConnectExtension
+          labels={{
+            connect: t("ext.connect"),
+            ok: t("ext.connected"),
+            tokenFailed: t("ext.tokenFailed"),
+            unreachable: t("ext.unreachable"),
+            refused: t("ext.refused"),
+            authFailed: t("ext.authFailed"),
+          }}
+        />
       </div>
     </main>
   );

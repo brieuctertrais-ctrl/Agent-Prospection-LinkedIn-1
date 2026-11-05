@@ -34,14 +34,22 @@ function validate(msg: unknown, senderUrl?: string): ExternalRequest | null {
 chrome.runtime.onMessageExternal.addListener((raw: unknown, sender, sendResponse) => {
   (async () => {
     const msg = validate(raw, sender.url);
-    if (!msg) return { ok: false, error: "invalid_request" };
+    if (!msg) {
+      console.warn(JSON.stringify({ where: "external", reason: "rejected_message" }));
+      return { ok: false, error: "invalid_request" };
+    }
     switch (msg.type) {
       case "PING":
         return { ok: true };
       case "AUTH_TOKEN": {
         // Exchange the one-time token for the extension's own session.
-        const { error } = await supabase.auth.verifyOtp({ token_hash: msg.token_hash, type: "magiclink" });
-        if (error) return { ok: false, error: "auth_failed" };
+        let { error } = await supabase.auth.verifyOtp({ token_hash: msg.token_hash, type: "email" });
+        if (error) ({ error } = await supabase.auth.verifyOtp({ token_hash: msg.token_hash, type: "magiclink" }));
+        if (error) {
+          // Local diagnostic only (service worker console): error code, never the token.
+          console.warn(JSON.stringify({ where: "AUTH_TOKEN", status: error.status, code: error.code }));
+          return { ok: false, error: "auth_failed" };
+        }
         await chrome.runtime.sendMessage({ type: "AUTH_CHANGED" }).catch(() => undefined);
         return { ok: true };
       }
