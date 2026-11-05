@@ -1,7 +1,7 @@
 import { normalizeProfileUrl, type Experience, type ScrapedProfile } from "@kairo/shared";
 import { query, queryAll, text } from "./dom";
 import { SELECTORS } from "./selectors";
-import { findNameElement, findTopCard, linesAfterName, nameFromTitle } from "./topcard";
+import { companyFromHeadline, findNameElement, findTopCard, linesAfterName, nameFromTitle } from "./topcard";
 
 function sectionByAnchor(key: "aboutSection" | "experienceSection" | "activitySection"): HTMLElement | null {
   const el = query<HTMLElement>(key);
@@ -36,7 +36,12 @@ function readExperiences(): Experience[] {
       if (!parts.length) return null;
       const [title = "", companyLine = "", dates = "", ...rest] = parts;
       const description = rest.filter((r) => r.length > 40).join(" ").slice(0, 600);
-      return { title, company: companyLine.split("·")[0].trim(), dates, description };
+      return {
+        title: title.slice(0, 200),
+        company: companyLine.split("·")[0].trim().slice(0, 200),
+        dates: dates.slice(0, 80),
+        description: description.slice(0, 800),
+      };
     })
     .filter((e): e is Experience => Boolean(e && e.title));
 }
@@ -74,14 +79,21 @@ export function scrapeProfile(): ScrapedProfile | null {
   const companyFromButton = text(query("currentCompany")).replace(/^(entreprise actuelle|current company)\s*:?\s*/i, "");
   const photo = query<HTMLImageElement>("profilePhoto")?.src ?? card?.querySelector<HTMLImageElement>("img[src*='licdn.com']")?.src;
 
+  const headline = (text(query("profileHeadline")) || fallback.headline).slice(0, 500);
+  const expCompany = experiences[0]?.company ?? "";
+  const company =
+    companyFromButton.split("\n")[0] ||
+    companyFromHeadline(headline) ||
+    (expCompany.length <= 80 ? expCompany : ""); // a long text is a description, not a company name
+
   return {
     linkedin_url: url,
     full_name: full_name.slice(0, 200),
     first_name: full_name.split(/\s+/)[0] ?? "",
-    headline: text(query("profileHeadline")) || fallback.headline,
-    company: companyFromButton || experiences[0]?.company || "",
-    location: text(query("profileLocation")) || fallback.location,
-    about: readAbout(),
+    headline,
+    company: company.slice(0, 200),
+    location: (text(query("profileLocation")) || fallback.location).slice(0, 200),
+    about: readAbout().slice(0, 5000),
     photo_url: photo && /^https:\/\/[a-z0-9.-]+\.licdn\.com\//.test(photo) ? photo : undefined,
     experiences,
     recent_activity: readActivity(),

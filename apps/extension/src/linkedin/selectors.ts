@@ -23,7 +23,16 @@ export const SELECTORS = {
   profileHeadline: { css: ["main .text-body-medium.break-words", "main [data-generated-suggestion-target]", ".pv-text-details__left-panel .text-body-medium"] },
   profileLocation: { css: ["main .text-body-small.inline.t-black--light.break-words", "main .pv-text-details__left-panel .text-body-small"] },
   profilePhoto: { css: ["main img.pv-top-card-profile-picture__image--show", "main img.pv-top-card-profile-picture__image", "main img.profile-photo-edit__preview", "main .pv-top-card__photo img"] },
-  currentCompany: { css: ["main button[aria-label^='Current company']", "main button[aria-label^='Entreprise actuelle']", "main [data-field='experience_company_logo'] span[aria-hidden='true']"] },
+  currentCompany: {
+    css: [
+      "main button[aria-label^='Current company']",
+      "main button[aria-label^='Entreprise actuelle']",
+      "button[aria-label^='Current company']",
+      "button[aria-label^='Entreprise actuelle']",
+      "a[aria-label^='Current company']",
+      "a[aria-label^='Entreprise actuelle']",
+    ],
+  },
   topCard: { css: ["main section.artdeco-card:first-of-type", "main .pv-top-card", "main section"], required: true },
   aboutSection: { css: ["section:has(> #about)", "section:has(#about)"] },
   aboutText: { css: [".inline-show-more-text span[aria-hidden='true']", "div.display-flex span[aria-hidden='true']", "span[aria-hidden='true']"] },

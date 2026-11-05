@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { HttpError } from "./errors.ts";
 
-const text = (max: number) => z.string().max(max * 2).transform((s) => s.replace(/\s+/g, " ").trim().slice(0, max));
+// Long scraped fields are truncated (not rejected); the 100 KB body cap bounds the payload.
+const text = (max: number) => z.string().max(20_000).transform((s) => s.replace(/\s+/g, " ").trim().slice(0, max));
 
 /** Schema of the profile data scraped by the extension (untrusted input). */
 export const ProfileSchema = z.object({

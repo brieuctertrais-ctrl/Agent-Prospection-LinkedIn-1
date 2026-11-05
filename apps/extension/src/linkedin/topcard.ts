@@ -61,7 +61,9 @@ export function linesAfterName(card: HTMLElement | null, name: string): { headli
   const start = lines.findIndex((l) => norm(l).startsWith(norm(name)));
   const rest = lines.slice(start >= 0 ? start + 1 : 0).filter((l) => l.length >= 3 && !NOISE.some((r) => r.test(l)));
   const headline = rest[0] ?? "";
-  const location = rest.slice(1).find((l) => /,/.test(l) || /france|belgique|suisse|canada|region|région/i.test(l)) ?? "";
+  const location =
+    rest.slice(1).find((l) => /,/.test(l) || /france|belgique|suisse|canada|region|région|périphérie|area|metropolitan/i.test(l)) ??
+    (rest[1] && rest[1].length <= 80 ? rest[1] : "");
   return { headline: headline.slice(0, 500), location: location.slice(0, 200) };
 }
 
@@ -79,4 +81,10 @@ export function diagnose(): string {
     h1_count: document.querySelectorAll("h1").length,
     connect_links: document.querySelectorAll("a[href*='custom-invite']").length,
   });
+}
+
+/** "Directeur administratif et financier chez Lessonia" → "Lessonia" */
+export function companyFromHeadline(headline: string): string {
+  const m = headline.match(/\s(?:chez|at|@)\s+([^|·,]{2,120})/i);
+  return m ? m[1].split(/\s[-–]\s/)[0].trim().slice(0, 80) : "";
 }

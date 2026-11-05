@@ -62,6 +62,19 @@ test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another 
   assert.equal(profile.connection_state, "none");
   assert.equal(profile.photo_url, "https://media.licdn.com/dms/image/abc.jpg");
 
+  // Variant: company only in the headline, location without comma, long experience text.
+  const variant = await page.evaluate(() => {
+    document.querySelector(".u8i9").textContent = "Directeur administratif et financier chez Saint-Gobain - Groupe";
+    document.querySelector(".o0p1 span").textContent = "Brest et périphérie";
+    return window.kairo.scrapeProfile();
+  });
+  assert.equal(variant.company, "Saint-Gobain");
+  assert.equal(variant.location, "Brest et périphérie");
+  await page.evaluate(() => {
+    document.querySelector(".u8i9").textContent = "DIRECTEUR ADMINISTRATIF ET FINANCIER";
+    document.querySelector(".o0p1 span").textContent = "Lille, Hauts-de-France, France";
+  });
+
   const note = "Bonjour François, test ?";
   const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
   assert.deepEqual(res, { ok: true });
