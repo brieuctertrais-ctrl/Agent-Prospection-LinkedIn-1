@@ -16,6 +16,7 @@ export interface AutoState {
   /** Last check of the connections page (ms). */
   lastAcceptCheck?: number;
   lastAccepted?: number;
+  lastFound?: number;
   lastProposed?: number;
   lastAt?: number;
   /** Last outcome, as an i18n key suffix (sent, failed, outside_hours, quota, none, paused, paused_by_user). */

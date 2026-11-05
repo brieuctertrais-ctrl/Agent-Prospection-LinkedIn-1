@@ -88,6 +88,7 @@ export async function tick(): Promise<void> {
       await patchAuto({
         lastAcceptCheck: Date.now(),
         lastAccepted: a.accepted,
+        lastFound: a.found ?? 0,
         lastProposed: a.proposed,
         nextAt: Date.now() + nextDelaySeconds(settings) * 1000,
       });

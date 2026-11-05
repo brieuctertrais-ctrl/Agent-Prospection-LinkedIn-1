@@ -260,6 +260,8 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
 export interface AcceptanceResult {
   accepted: number;
   proposed: number;
+  /** Number of connections read on the page (0 = page not readable). */
+  found?: number;
   code?: string;
 }
 
@@ -284,7 +286,7 @@ export async function checkAcceptances(tabId: number, maxProposals = 10): Promis
   const { data: accepted } = await supabase.rpc("mark_accepted", { urls: res.urls });
   const ids = (accepted as string[] | null) ?? [];
   const proposed = await proposeFollowups(maxProposals);
-  return { accepted: ids.length, proposed };
+  return { accepted: ids.length, proposed, found: res.urls.length };
 }
 
 /** Prepares follow-up #1 for accepted leads that don't have one yet. */

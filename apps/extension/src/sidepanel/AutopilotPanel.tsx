@@ -156,6 +156,7 @@ export function AutopilotPanel({
         t("ap.auto.lastCheck", {
           time: new Date(a.lastAcceptCheck).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
           accepted: a.lastAccepted ?? 0,
+          found: a.lastFound ?? 0,
         }),
       );
     }
