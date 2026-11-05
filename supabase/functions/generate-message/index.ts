@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     let feedback: string | undefined;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
-      const out = await complete(invitationSystem(MAX_CHARS), invitationPrompt(ct, profile, body.previous_tet, feedback));
+      const out = await complete(invitationSystem(MAX_CHARS), invitationPrompt(ctx, profile, body.previous_text, feedback));
       await recordAiUsage(supabase, usageId, out.usage);
       text = sanitizeAiText(out.text);
       const chars = [...text].length;
