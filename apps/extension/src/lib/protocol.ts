@@ -25,7 +25,7 @@ export type ContentResponse =
   | { ok: true; type: "PONG"; url: string }
   | { ok: true; type: "PROFILE"; profile: ScrapedProfile }
   | { ok: true; type: "SEARCH_RESULTS"; urls: string[]; hasNextPage: boolean }
-  | { ok: true; type: "INVITATION_SENT" }
+  | { ok: true; type: "INVITATION_SENT"; noteLimit?: number }
   | { ok: true; type: "HEALTH" }
   | { ok: false; code: SendCode | "not_a_profile" | "unknown"; detail?: string };
 

@@ -36,7 +36,7 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
     }
     case "SEND_INVITATION": {
       const r = await sendInvitation(req.note);
-      if (r.ok) return { ok: true, type: "INVITATION_SENT" };
+      if (r.ok) return { ok: true, type: "INVITATION_SENT", noteLimit: r.noteLimit };
       const structural = ["ui_changed", "connect_not_found", "note_not_found", "textarea_not_found", "send_not_found", "not_pending"];
       return { ok: false, code: r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }

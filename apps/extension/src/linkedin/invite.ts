@@ -3,7 +3,7 @@ import { deepButton, deepQueryAll, dialogMatches, humanPause, isReallyVisible, i
 import { findNameElement, findTopCard, nameFromTitle } from "./topcard";
 import { WARNING_PATTERNS } from "./selectors";
 
-export type InviteResult = { ok: true } | { ok: false; code: SendCode; detail?: string };
+export type InviteResult = { ok: true; noteLimit?: number } | { ok: false; code: SendCode; detail?: string };
 
 export function detectAccountWarning(): SendCode | null {
   if (/\/checkpoint\//.test(location.pathname) || pageMatches(WARNING_PATTERNS.securityCheck)) return "security_check";
@@ -90,7 +90,7 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   }, 8000, 300);
   if (done === "limit") return { ok: false, code: "limit_reached" };
   if (done !== "pending") return { ok: false, code: "not_pending" };
-  return { ok: true };
+  return { ok: true, noteLimit: limit ?? undefined };
 }
 
 const lastName = (name: string) => name.trim().split(/\s+/).slice(-1)[0]?.toLowerCase() ?? "";

@@ -37,7 +37,7 @@ test("scrape profile and send invitation on fixture", { timeout: 60000 }, async 
 
   const note = "Bonjour Sami, test ?";
   const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
-  assert.deepEqual(res, { ok: true });
+  assert.equal(res.ok, true);
   assert.equal(await page.evaluate(() => window.__note), note);
   } finally {
     await browser.close();
@@ -83,7 +83,7 @@ test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another 
   // Retry with a short note: the already-open modal is reused (no second click on Connect).
   const note = "Bonjour Monsieur Mathon, test ?";
   const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
-  assert.deepEqual(res, { ok: true });
+  assert.deepEqual(res, { ok: true, noteLimit: 200 }); // limit read from LinkedIn's modal
   assert.equal(await page.evaluate(() => window.__note), note);
   assert.equal(await page.evaluate(() => window.__wrongClicked ?? false), false);
   assert.equal(await page.evaluate(() => window.__sentWithoutNote ?? false), false);

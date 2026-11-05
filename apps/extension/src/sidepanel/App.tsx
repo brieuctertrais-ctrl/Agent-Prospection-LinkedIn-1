@@ -192,6 +192,12 @@ export function App() {
 
     if (res.ok) {
       await markInvitationSent(current.leadId, current.prospectId, current.profile.linkedin_url);
+      // Limit read in LinkedIn's modal (200 free / 300 Premium): follow upgrades and downgrades.
+      if (res.type === "INVITATION_SENT" && res.noteLimit && res.noteLimit !== noteMax) {
+        const limit = Math.max(150, Math.min(300, res.noteLimit));
+        setNoteMax(limit);
+        await patchState({ noteMaxChars: limit });
+      }
       return setScreen({ ...current, sendState: "sent" });
     }
     await logAction("invitation", "failure", { code: res.code, detail: res.detail }, { prospect_id: current.prospectId, linkedin_url: current.profile.linkedin_url });
