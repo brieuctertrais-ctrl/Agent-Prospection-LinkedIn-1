@@ -4,6 +4,7 @@ import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
 import { diagnose } from "../linkedin/topcard";
 import { scrapeConnections, scrapeInbox, sendMessage } from "../linkedin/messaging";
+import { findCompanyUrl, scrapeCompany } from "../linkedin/company";
 
 async function handle(req: ContentRequest): Promise<ContentResponse> {
   switch (req.type) {
@@ -44,6 +45,15 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       const w = detectAccountWarning();
       if (w) return { ok: false, code: w };
       return { ok: true, type: "INBOX", conversations: await scrapeInbox() };
+    }
+    case "FIND_COMPANY_URL":
+      return { ok: true, type: "COMPANY_URL", url: findCompanyUrl() };
+    case "SCRAPE_COMPANY": {
+      for (let i = 0; i < 3; i++) {
+        window.scrollBy({ top: 700, behavior: "auto" });
+        await sleep(400);
+      }
+      return { ok: true, type: "COMPANY", ...scrapeCompany() };
     }
     case "SEND_MESSAGE": {
       const r = await sendMessage(req.text);

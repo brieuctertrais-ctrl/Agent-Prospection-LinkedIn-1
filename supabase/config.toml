@@ -55,3 +55,8 @@ import_map = "./functions/score-profile/deno.json"
 verify_jwt = true
 entrypoint = "./functions/generate-followup/index.ts"
 import_map = "./functions/generate-followup/deno.json"
+
+[functions.suggest-persona]
+verify_jwt = true
+entrypoint = "./functions/suggest-persona/index.ts"
+import_map = "./functions/suggest-persona/deno.json"

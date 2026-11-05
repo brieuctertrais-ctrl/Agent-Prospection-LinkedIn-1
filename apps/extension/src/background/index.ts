@@ -2,6 +2,7 @@ import type { ExternalRequest } from "../lib/protocol";
 import { supabase } from "../lib/supabase";
 import { patchState } from "../lib/storage";
 import { WEB_APP_URL } from "../lib/config";
+import { runOnboarding } from "../lib/onboarding";
 
 import { ALARM, scheduleAlarm, tick } from "./sender";
 import { patchAuto } from "../lib/autostate";
@@ -42,6 +43,7 @@ function validate(msg: unknown, senderUrl?: string): ExternalRequest | null {
   if (m.type === "AUTH_TOKEN" && typeof m.email === "string" && EMAIL.test(m.email) && typeof m.token_hash === "string" && TOKEN_HASH.test(m.token_hash)) {
     return { type: "AUTH_TOKEN", email: m.email, token_hash: m.token_hash };
   }
+  if (m.type === "SUGGEST_PERSONA") return { type: "SUGGEST_PERSONA" };
   if (m.type === "SET_ACTIVE_PERSONA" && typeof m.personaId === "string" && UUID.test(m.personaId)) {
     return { type: "SET_ACTIVE_PERSONA", personaId: m.personaId };
   }
@@ -70,6 +72,16 @@ chrome.runtime.onMessageExternal.addListener((raw: unknown, sender, sendResponse
         }
         await chrome.runtime.sendMessage({ type: "AUTH_CHANGED" }).catch(() => undefined);
         return { ok: true };
+      }
+      case "SUGGEST_PERSONA": {
+        // Visible LinkedIn tab (the user asked for it from the dashboard and can watch it).
+        const [existing] = await chrome.tabs.query({ url: "https://www.linkedin.com/*", pinned: false });
+        const tab = existing?.id
+          ? await chrome.tabs.update(existing.id, { active: true })
+          : await chrome.tabs.create({ url: "https://www.linkedin.com/feed/", active: true });
+        if (!tab?.id) return { ok: false, error: "no_tab" };
+        const r = await runOnboarding(tab.id);
+        return r.ok ? { ok: true } : { ok: false, error: r.code };
       }
       case "SET_ACTIVE_PERSONA": {
         // The persona list shown in the panel comes from RLS-filtered queries: an unknown id is ignored there.

@@ -107,3 +107,13 @@ export type FollowupKind = "followup_1" | "followup_2" | "followup_3" | "followu
 
 export const generateFollowup = (prospect_id: string, kind: FollowupKind = "followup_1", previous_text?: string) =>
   invoke<{ message_id: string; text: string; chars: number }>("generate-followup", { prospect_id, kind, ...(previous_text ? { previous_text } : {}) });
+
+export interface PersonaSuggestion {
+  persona: { name: string; job_titles: string[]; locations: string[]; industries: string[]; company_sizes: string[]; keywords: string[] };
+  pitch: { title: string; description: string; benefits: string };
+  copywriting: { instructions: string; followup_instructions: string };
+}
+
+/** Automatic onboarding: suggestion stored server-side, reviewed in the persona form. */
+export const suggestPersona = (body: { profile: ScrapedProfile; company: { url?: string; name: string; text: string }; industries: string[] }) =>
+  invoke<{ suggestion: PersonaSuggestion }>("suggest-persona", body as unknown as Record<string, unknown>);

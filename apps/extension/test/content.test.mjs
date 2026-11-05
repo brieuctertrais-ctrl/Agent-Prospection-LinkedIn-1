@@ -169,3 +169,28 @@ test("inbox: who wrote last; a reminder is never sent over a reply", { timeout: 
     await browser.close();
   }
 });
+
+test("onboarding: current company link on a profile and company 'About' page", { timeout: 60000 }, async () => {
+  const profile = readFileSync(new URL("./profile-1st.html", import.meta.url), "utf8");
+  const company = readFileSync(new URL("./company.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/in/vincent-besson/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: profile }));
+    await page.route("https://www.linkedin.com/company/efi/about/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: company }));
+    await page.goto("https://www.linkedin.com/in/vincent-besson/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    assert.equal(await page.evaluate(() => window.kairo.findCompanyUrl()), "https://www.linkedin.com/company/andre-renault/");
+
+    await page.goto("https://www.linkedin.com/company/efi/about/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    const c = await page.evaluate(() => window.kairo.scrapeCompany());
+    assert.equal(c.name, "EFI Énergies");
+    assert.match(c.text, /mettant en concurrence les fournisseurs/);
+    assert.match(c.text, /11-50 employés/);
+    assert.doesNotMatch(c.text, /^Suivre$/m);
+  } finally {
+    await browser.close();
+  }
+});

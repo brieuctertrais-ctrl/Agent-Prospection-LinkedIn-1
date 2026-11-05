@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { ProspectButton } from "@/components/prospect-button";
+import { OnboardingButton } from "@/components/onboarding-button";
 
 export default async function PersonasPage() {
   const { supabase, user } = await requireUser();
@@ -43,11 +44,17 @@ export default async function PersonasPage() {
         ))}
       </div>
 
-      <Link href="/personas/new" className="mt-4 inline-block">
-        <Button variant="outline">
-          <Plus className="h-4 w-4" /> {t("personas.new")}
-        </Button>
-      </Link>
+      <div className="mt-4 flex flex-wrap items-start gap-3">
+        <OnboardingButton
+          labels={{ button: t("onb.button"), running: t("onb.running"), error: t("onb.error"), noExt: t("onb.noExt") }}
+        />
+        <Link href="/personas/new">
+          <Button variant="outline">
+            <Plus className="h-4 w-4" /> {t("personas.new")}
+          </Button>
+        </Link>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{t("onb.hint")}</p>
 
       <div className="mt-16 flex items-center justify-between rounded-2xl border border-dashed border-white/10 p-6">
         <p className="text-slate-300">{t("personas.needMore")}</p>

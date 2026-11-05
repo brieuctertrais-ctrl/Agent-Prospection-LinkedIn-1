@@ -8,6 +8,8 @@ export type ContentRequest =
   | { type: "SEND_INVITATION"; note: string }
   | { type: "SCRAPE_CONNECTIONS" }
   | { type: "SCRAPE_INBOX" }
+  | { type: "FIND_COMPANY_URL" }
+  | { type: "SCRAPE_COMPANY" }
   | { type: "SEND_MESSAGE"; text: string }
   | { type: "CHECK_HEALTH" };
 
@@ -32,6 +34,8 @@ export type ContentResponse =
   | { ok: true; type: "HEALTH" }
   | { ok: true; type: "CONNECTIONS"; urls: string[] }
   | { ok: true; type: "INBOX"; conversations: { name: string; fromMe: boolean }[] }
+  | { ok: true; type: "COMPANY_URL"; url: string | null }
+  | { ok: true; type: "COMPANY"; name: string; text: string }
   | { ok: true; type: "MESSAGE_SENT" }
   | { ok: false; code: SendCode | "not_a_profile" | "unknown" | string; detail?: string };
 
@@ -39,4 +43,5 @@ export type ContentResponse =
 export type ExternalRequest =
   | { type: "AUTH_TOKEN"; email: string; token_hash: string }
   | { type: "SET_ACTIVE_PERSONA"; personaId: string }
+  | { type: "SUGGEST_PERSONA" }
   | { type: "PING" };

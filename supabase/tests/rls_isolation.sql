@@ -234,3 +234,16 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.expect_error($$update user_settings set purge_rejected_after_months = 120$$, 'retention setting bounded');
 reset role;
 \echo ALL PURGE TESTS PASSED
+
+-- ===== Onboarding suggestions =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+insert into linkedin_profiles_user (user_id, profile_url, company_url, suggestion)
+  values (auth.uid(), 'https://www.linkedin.com/in/alice/', 'https://www.linkedin.com/company/efi/', '{"persona": {"name": "DAF PME"}}');
+select pg_temp.expect_error($$insert into linkedin_profiles_user (user_id, company_url) values (auth.uid(), 'javascript:alert(1)')$$, 'invalid company url rejected');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((select count(*) from linkedin_profiles_user) = 0, 'B cannot read A onboarding data');
+select pg_temp.expect_error($$insert into linkedin_profiles_user (user_id) values ('00000000-0000-0000-0000-00000000000a')$$, 'B cannot write onboarding data for A');
+reset role;
+\echo ALL ONBOARDING TESTS PASSED

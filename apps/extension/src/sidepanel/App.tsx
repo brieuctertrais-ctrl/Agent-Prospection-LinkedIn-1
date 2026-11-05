@@ -7,6 +7,7 @@ import { getLinkedInTab, sendToTab } from "../lib/tabs";
 import { nextProfile, resetQueue, type Settings } from "../lib/engine";
 import { ApiError, countToday, fetchPersona, countWeek, generateMessage, logAction, markInvitationSent, rejectProfile, saveEditedMessage } from "../lib/api";
 import { WEB_APP_URL } from "../lib/config";
+import { runOnboarding } from "../lib/onboarding";
 import { Bubble, Conversation, GhostButton, GoldButton, Header, Mascot } from "./components";
 import { MessageCard } from "./MessageCard";
 import { CopywritingPanel } from "./CopywritingPanel";
@@ -342,9 +343,10 @@ function ScreenView({
       return (
         <EmptyState>
           <Bubble>{t("panel.noPersona")}</Bubble>
-          <GoldButton className="w-full" onClick={() => chrome.tabs.create({ url: `${WEB_APP_URL}/personas/new` })}>
+          <OnboardingButton t={t} />
+          <GhostButton className="w-full" onClick={() => chrome.tabs.create({ url: `${WEB_APP_URL}/personas/new` })}>
             {t("personas.new")}
-          </GoldButton>
+          </GhostButton>
           <GhostButton className="w-full" onClick={onRetry}>↻</GhostButton>
         </EmptyState>
       );
@@ -491,5 +493,31 @@ function EmptyState({ children }: { children: React.ReactNode }) {
       <Mascot size={96} />
       <div className="flex w-full flex-col items-center gap-3">{children}</div>
     </div>
+  );
+}
+
+/** Automatic onboarding from the panel: own profile + company page → pre-filled persona form. */
+function OnboardingButton({ t }: { t: (k: string, v?: Record<string, string | number>) => string }) {
+  const [state, setState] = useState<"idle" | "running" | "error">("idle");
+  return (
+    <>
+      <GoldButton
+        className="w-full"
+        disabled={state === "running"}
+        onClick={async () => {
+          const tab = await getLinkedInTab();
+          if (!tab?.id) return setState("error");
+          setState("running");
+          const r = await runOnboarding(tab.id);
+          if (r.ok) {
+            setState("idle");
+            void chrome.tabs.create({ url: `${WEB_APP_URL}/personas/new?from=linkedin` });
+          } else setState("error");
+        }}
+      >
+        {state === "running" ? t("onb.running") : t("onb.button")}
+      </GoldButton>
+      {state === "error" && <p className="text-xs text-red-300">{t("onb.error")}</p>}
+    </>
   );
 }
