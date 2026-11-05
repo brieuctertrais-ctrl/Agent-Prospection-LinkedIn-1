@@ -39,7 +39,7 @@
     shadow.appendChild(d);
     d.querySelector('#nonote').addEventListener('click', () => { window.__sentWithoutNote = true; });
     d.querySelector('#add').addEventListener('click', () => {
-      d.innerHTML = '<h2>Ajouter une note à votre invitation</h2><textarea></textarea><button>Annuler</button><button id="send" disabled>Envoyer</button>';
+      d.innerHTML = '<h2>Ajouter une note à votre invitation</h2><textarea maxlength="200"></textarea><span>0/200</span><button>Annuler</button><button id="send" disabled>Envoyer</button>';
       const ta = d.querySelector('textarea'); const send = d.querySelector('#send');
       ta.addEventListener('input', () => { send.disabled = !ta.value; window.__note = ta.value; });
       send.addEventListener('click', () => {

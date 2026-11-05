@@ -22,8 +22,8 @@ async function invoke<T>(fn: string, body: Record<string, unknown>): Promise<T> 
   return data as T;
 }
 
-export const generateMessage = (persona_id: string, profile: ScrapedProfile, previous_text?: string) =>
-  invoke<GenerateMessageResponse>("generate-message", { persona_id, profile, previous_text });
+export const generateMessage = (persona_id: string, profile: ScrapedProfile, previous_text?: string, max_chars?: number) =>
+  invoke<GenerateMessageResponse>("generate-message", { persona_id, profile, previous_text, ...(max_chars ? { max_chars } : {}) });
 
 export const scoreProfile = (persona_id: string, profile: ScrapedProfile) =>
   invoke<ScoreProfileResponse>("score-profile", { persona_id, profile });

@@ -26,29 +26,34 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   const card = findTopCard(nameEl);
   if (isPending(card)) return { ok: false, code: "already_connected" };
 
-  // 1. Connect (directly, or through the "More" menu) — always the button of THIS profile.
-  let connect = findConnect(card, name);
-  if (!connect) {
-    const more = findInCard(card, /^(plus|more)$/i, /plus d.actions|more actions/i) ?? query<HTMLElement>("moreButton", card ?? document);
-    if (more) {
-      more.click();
-      await humanPause();
-      connect = await waitFor(() => findMenuConnect(name), 3000);
+  // The invitation modal may still be open (note field shown) from a previous attempt: reuse it.
+  const reuse = inviteDialog();
+  const reuseNote = reuse ? deepQueryAll<HTMLTextAreaElement>("textarea", reuse).find(isReallyVisible) : undefined;
+  if (!reuseNote) {
+    // 1. Connect (directly, or through the "More" menu) — always the button of THIS profile.
+    let connect = findConnect(card, name);
+    if (!connect) {
+      const more = findInCard(card, /^(plus|more)$/i, /plus d.actions|more actions/i) ?? query<HTMLElement>("moreButton", card ?? document);
+      if (more) {
+        more.click();
+        await humanPause();
+        connect = await waitFor(() => findMenuConnect(name), 3000);
+      }
     }
+    if (!connect) return { ok: false, code: "connect_not_found" };
+    connect.click();
+    await humanPause();
+
+    const dialog = await waitFor(() => inviteDialog(), 6000);
+    if (!dialog) return { ok: false, code: "note_not_found", detail: "dialog" };
+    if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || warningIn(dialog, WARNING_PATTERNS.weeklyLimit)) return { ok: false, code: "limit_reached" };
+
+    // 2. Add a note (exact label match: never "Envoyer sans note")
+    const addNote = await waitFor(() => deepButton(inviteDialog() ?? dialog, ADD_NOTE) ?? query<HTMLElement>("addNoteButton"), 4000);
+    if (!addNote) return { ok: false, code: "note_not_found" };
+    addNote.click();
+    await humanPause();
   }
-  if (!connect) return { ok: false, code: "connect_not_found" };
-  connect.click();
-  await humanPause();
-
-  const dialog = await waitFor(() => inviteDialog(), 6000);
-  if (!dialog) return { ok: false, code: "note_not_found", detail: "dialog" };
-  if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || warningIn(dialog, WARNING_PATTERNS.weeklyLimit)) return { ok: false, code: "limit_reached" };
-
-  // 2. Add a note (exact label match: never "Envoyer sans note")
-  const addNote = await waitFor(() => deepButton(inviteDialog() ?? dialog, ADD_NOTE) ?? query<HTMLElement>("addNoteButton"), 4000);
-  if (!addNote) return { ok: false, code: "note_not_found" };
-  addNote.click();
-  await humanPause();
 
   // 3. Paste the note
   const textarea = await waitFor(() => {
@@ -61,6 +66,9 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
     if (d && warningIn(d, WARNING_PATTERNS.noteLimit)) return { ok: false, code: "limit_reached", detail: "note_limit" };
     return { ok: false, code: "textarea_not_found" };
   }
+  // LinkedIn's own note limit for this account (200 free / 300 Premium): never try to exceed it.
+  const limit = noteLimit(textarea);
+  if (limit && [...note].length > limit) return { ok: false, code: "note_too_long", detail: String(limit) };
   textarea.focus();
   setNativeValue(textarea, note);
   await humanPause(600, 1500);
@@ -151,4 +159,13 @@ function inviteDialog(): HTMLElement | null {
 function warningIn(root: HTMLElement, patterns: RegExp[]): boolean {
   const t = root.innerText || "";
   return patterns.some((p) => p.test(t));
+}
+
+/** Reads the note length limit from the textarea or the "x/200" counter of the invitation modal. */
+function noteLimit(textarea: HTMLTextAreaElement): number | null {
+  if (textarea.maxLength > 0 && textarea.maxLength <= 1000) return textarea.maxLength;
+  const d = inviteDialog();
+  const m = (d?.innerText ?? "").match(/\b\d{1,3}\s*\/\s*(\d{3})\b/);
+  const n = m ? Number(m[1]) : NaN;
+  return n >= 100 && n <= 1000 ? n : null;
 }

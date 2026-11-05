@@ -6,17 +6,19 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 import { errorResponse, HttpError } from "../_shared/errors.ts";
 import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClient } from "../_shared/supabase.ts";
 import { complete, sanitizeAiText } from "../_shared/claude.ts";
-import { INVITATION_SYSTEM, invitationPrompt } from "../_shared/prompts.ts";
+import { invitationPrompt, invitationSystem } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
 import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
 
-const MAX_CHARS = 300;
+const LINKEDIN_MAX = 300; // absolute cap (LinkedIn Premium); free accounts: 200
 const MAX_ATTEMPTS = 3;
 
 const BodySchema = z.object({
   persona_id: z.string().uuid(),
   profile: ProfileSchema,
   previous_text: z.string().max(600).optional(),
+  // Note limit detected on the user's LinkedIn account (200 free / 300 Premium). Can only lower the cap.
+  max_chars: z.number().int().min(150).max(LINKEDIN_MAX).default(LINKEDIN_MAX),
 });
 
 Deno.serve(async (req) => {
@@ -38,13 +40,14 @@ Deno.serve(async (req) => {
     );
     if (decErr) throw new Error(`decision_failed: ${decErr.code}`);
 
-    // Generate; if over the LinkedIn limit, ask the model to shorten. Never return > 300 chars.
+    // Generate; if over the LinkedIn limit, ask the model to shorten. Never return more than MAX_CHARS.
+    const MAX_CHARS = body.max_chars;
     // Each model call consumes one unit of the user's AI quota.
     let text = "";
     let feedback: string | undefined;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
-      const out = await complete(INVITATION_SYSTEM, invitationPrompt(ctx, profile, body.previous_text, feedback));
+      const out = await complete(invitationSystem(MAX_CHARS), invitationPrompt(ct, profile, body.previous_tet, feedback));
       await recordAiUsage(supabase, usageId, out.usage);
       text = sanitizeAiText(out.text);
       const chars = [...text].length;
@@ -52,9 +55,9 @@ Deno.serve(async (req) => {
       const greetingValid = greetingOk(text, profile.first_name, lastName);
       if (chars > 0 && chars <= MAX_CHARS && greetingValid) break;
       feedback = !greetingValid && chars > 0
-        ? `Le message doit commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, » (capitalisation normale du nom). Réécris-le, 280 caractères maximum.`
-        : `Ton message fait ${chars} caractères : réécris-le en 260 caractères maximum, en gardant la formule « Bonjour Monsieur/Madame <Nom>, », l'élément personnalisé et la question finale.`;
-      // Retry; on the last attempt a note of valid length is still returned (the user can edit it). Never > 300 chars.
+        ? `Le message doit commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, » (capitalisation normale du nom). Réécris-le, ${MAX_CHARS - 20} caractères maximum.`
+        : `Ton message fait ${chars} caractères : réécris-le en ${MAX_CHARS - 40} caractères maximum, en gardant la formule « Bonjour Monsieur/Madame <Nom>, », l'élément personnalisé et la question finale.`;
+      // Retry; on the last attempt a note of valid length is still returned (the user can edit it). Never > MAX_CHARS.
       if (!(chars > 0 && chars <= MAX_CHARS)) text = "";
       else if (attempt < MAX_ATTEMPTS - 1) text = "";
     }

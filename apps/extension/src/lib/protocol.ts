@@ -18,7 +18,8 @@ export type SendCode =
   | "already_connected"
   | "security_check"
   | "ui_changed"
-  | "quota_reached";
+  | "quota_reached"
+  | "note_too_long";
 
 export type ContentResponse =
   | { ok: true; type: "PONG"; url: string }

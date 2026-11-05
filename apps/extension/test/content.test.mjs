@@ -75,7 +75,13 @@ test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another 
     document.querySelector(".o0p1 span").textContent = "Lille, Hauts-de-France, France";
   });
 
-  const note = "Bonjour François, test ?";
+  // Free LinkedIn account: 200-char limit → refuse without sending, modal left open.
+  const tooLong = await page.evaluate((n) => window.kairo.sendInvitation(n), "Bonjour Monsieur Mathon, " + "a".repeat(250));
+  assert.deepEqual(tooLong, { ok: false, code: "note_too_long", detail: "200" });
+  assert.equal(await page.evaluate(() => window.__note), undefined);
+
+  // Retry with a short note: the already-open modal is reused (no second click on Connect).
+  const note = "Bonjour Monsieur Mathon, test ?";
   const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
   assert.deepEqual(res, { ok: true });
   assert.equal(await page.evaluate(() => window.__note), note);

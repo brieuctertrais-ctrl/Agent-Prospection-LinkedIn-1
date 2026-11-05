@@ -6,6 +6,8 @@ export interface LocalState {
   /** Per persona: next LinkedIn search page to read and queued candidate URLs. */
   queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string; v?: number }>;
   pausedReason?: string;
+  /** Note length limit detected on the user's LinkedIn account (200 free, 300 Premium). */
+  noteMaxChars?: number;
 }
 
 const DEFAULT: LocalState = { mode: "copilot", queues: {} };

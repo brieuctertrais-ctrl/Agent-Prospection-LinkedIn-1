@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Copy, Check, Pencil, RefreshCw, Send } from "lucide-react";
-import { INVITATION_MAX_CHARS } from "@kairo/shared";
 import { GoldButton } from "./components";
 
 export function MessageCard({
@@ -10,6 +9,7 @@ export function MessageCard({
   onSend,
   busy,
   sendState,
+  maxChars,
   t,
 }: {
   text: string;
@@ -18,12 +18,13 @@ export function MessageCard({
   onSend: () => void;
   busy: boolean;
   sendState: "idle" | "sending" | "sent" | "failed";
+  maxChars: number;
   t: (k: string, v?: Record<string, string | number>) => string;
 }) {
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const chars = [...text].length;
-  const tooLong = chars > INVITATION_MAX_CHARS;
+  const tooLong = chars > maxChars;
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
@@ -55,7 +56,7 @@ export function MessageCard({
         <p className="whitespace-pre-line text-sm leading-relaxed">{text}</p>
       )}
       <p className={`mt-2 text-right text-xs ${tooLong ? "font-semibold text-red-600" : "text-navy/60"}`}>
-        {tooLong ? t("panel.tooLong") : t("panel.chars", { count: chars })}
+        {tooLong ? t("panel.tooLong", { max: maxChars }) : t("panel.chars", { count: chars, max: maxChars })}
       </p>
       {sendState !== "sent" && (
         <GoldButton className="mt-3 w-full" onClick={onSend} disabled={busy || tooLong || sendState === "sending"}>

@@ -112,8 +112,8 @@ const fr = {
   "panel.copyManual": "Copier le message",
   "panel.regenerate": "Régénérer",
   "panel.edit": "Modifier",
-  "panel.chars": "{count}/300 caractères",
-  "panel.tooLong": "Message trop long (300 caractères max).",
+  "panel.chars": "{count}/{max} caractères",
+  "panel.tooLong": "Message trop long ({max} caractères max).",
   "panel.noMore": "Je n'ai plus de profils à te proposer pour ce persona aujourd'hui. Reviens demain ou ajuste ton persona !",
   "panel.searchAgain": "Chercher à nouveau",
   "panel.dailyCap": "Tu as atteint ton plafond quotidien de profils consultés. On reprend demain 💪",
@@ -140,6 +140,7 @@ const fr = {
   "send.security_check": "LinkedIn demande une vérification de sécurité",
   "send.ui_changed": "l'interface LinkedIn a changé",
   "send.quota_reached": "quota quotidien d'invitations atteint",
+  "send.note_too_long": "ton compte LinkedIn limite les notes à {max} caractères. Rien n'a été envoyé : clique sur Annuler dans LinkedIn, puis Régénérer pour une version plus courte (ou raccourcis avec Modifier).",
 } as const;
 
 export type MessageKey = keyof typeof fr;
@@ -255,8 +256,8 @@ const en: Record<MessageKey, string> = {
   "panel.copyManual": "Copy the message",
   "panel.regenerate": "Regenerate",
   "panel.edit": "Edit",
-  "panel.chars": "{count}/300 characters",
-  "panel.tooLong": "Message too long (300 characters max).",
+  "panel.chars": "{count}/{max} characters",
+  "panel.tooLong": "Message too long ({max} characters max).",
   "panel.noMore": "No more profiles for this persona today. Come back tomorrow or adjust your persona!",
   "panel.searchAgain": "Search again",
   "panel.dailyCap": "You reached your daily profile view cap. See you tomorrow 💪",
@@ -283,6 +284,7 @@ const en: Record<MessageKey, string> = {
   "send.security_check": "LinkedIn is asking for a security check",
   "send.ui_changed": "LinkedIn's interface changed",
   "send.quota_reached": "daily invitation quota reached",
+  "send.note_too_long": "your LinkedIn account limits notes to {max} characters. Nothing was sent: click Cancel in LinkedIn, then Regenerate for a shorter version (or shorten it with Edit).",
 };
 
 const dictionaries: Record<Locale, Record<MessageKey, string>> = { fr, en };

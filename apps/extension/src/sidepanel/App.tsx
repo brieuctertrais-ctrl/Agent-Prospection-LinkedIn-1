@@ -52,6 +52,7 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [mode, setMode] = useState<Mode>("copilot");
   const [notice, setNotice] = useState<string>();
+  const [noteMax, setNoteMax] = useState(200); // LinkedIn free accounts: 200 chars (300 with Premium)
   const busy = useRef(false);
 
   const t = useCallback(
@@ -75,6 +76,7 @@ export function App() {
     setPersonas(list);
     if (us.data) setSettings({ ...DEFAULT_SETTINGS, ...us.data });
     setMode(local.mode);
+    if (local.noteMaxChars) setNoteMax(local.noteMaxChars);
     const active = list.find((p) => p.id === local.activePersonaId)?.id ?? us.data?.active_persona_id ?? list[0]?.id;
     setActivePersonaId(active);
     if (!list.length) return setScreen({ name: "noPersona" });
@@ -144,7 +146,7 @@ export function App() {
     const profile = screen.profile;
     setScreen({ name: "writing", profile });
     try {
-      const r = await generateMessage(persona.id, profile);
+      const r = await generateMessage(persona.id, profile, undefined, noteMax);
       setScreen({
         name: "message",
         profile,
@@ -165,8 +167,8 @@ export function App() {
     const current = screen;
     setScreen({ ...current, regenerating: true });
     try {
-      const r = await generateMessage(persona.id, current.profile, current.text);
-      setScreen({ ...current, text: r.text, originalText: r.text, messageId: r.message_id, regenerating: false });
+      const r = await generateMessage(persona.id, current.profile, current.text, noteMax);
+      setScreen({ ...current, text: r.text, originalText: r.text, messageId: r.message_id, regenerating: false, sendState: "idle", sendError: undefined });
     } catch (e) {
       setScreen({ ...current, regenerating: false, sendError: t(errorKey(e)) });
     }
@@ -193,6 +195,13 @@ export function App() {
       return setScreen({ ...current, sendState: "sent" });
     }
     await logAction("invitation", "failure", { code: res.code, detail: res.detail }, { prospect_id: current.prospectId, linkedin_url: current.profile.linkedin_url });
+    if (res.code === "note_too_long") {
+      // Remember the account's limit: next messages are written for it. Nothing was sent.
+      const limit = Math.max(150, Math.min(300, Number(res.detail) || 200));
+      setNoteMax(limit);
+      await patchState({ noteMaxChars: limit });
+      return setScreen({ ...current, sendState: "failed", sendError: t("send.note_too_long", { max: limit }) });
+    }
     const reason = t(`send.${res.code}`) || res.code;
     if (res.code === "security_check" || res.code === "limit_reached" || res.code === "ui_changed") {
       await patchState({ pausedReason: res.code });
@@ -241,6 +250,7 @@ export function App() {
             onSend={send}
             onEdit={(text) => screen.name === "message" && setScreen({ ...screen, text })}
             onResume={resume}
+            noteMax={noteMax}
             onSearchAgain={async () => {
               if (persona) await resetQueue(persona.id);
               await explore();
@@ -266,6 +276,7 @@ function ScreenView({
   onResume,
   onRetry,
   onSearchAgain,
+  noteMax,
 }: {
   screen: Screen;
   t: (k: string, v?: Record<string, string | number>) => string;
@@ -279,6 +290,7 @@ function ScreenView({
   onResume: () => void;
   onRetry: () => void;
   onSearchAgain: () => void;
+  noteMax: number;
 }) {
   const next = (
     <GoldButton className="w-full" onClick={onExplore}>
@@ -373,6 +385,7 @@ function ScreenView({
             onSend={onSend}
             busy={Boolean(screen.regenerating)}
             sendState={screen.sendState}
+            maxChars={noteMax}
             t={t}
           />
           {screen.sendState === "sent" && <Bubble>{t("panel.sent")}</Bubble>}
