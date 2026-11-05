@@ -1,0 +1,96 @@
+# Automatic checks on every push / pull request. No secret is needed or used:
+# builds run with dummy public values, tests run on a throwaway PostgreSQL and a local Chromium.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code:
+    name: Typecheck, unit tests, builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-public-key
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-dummy-public-key
+      VITE_WEB_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspaces --if-present
+      - run: npm test -w @kairo/shared
+      - run: npm run build:web
+      - run: npm run build:ext
+
+  extension-dom:
+    name: LinkedIn DOM tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save playwright@1.63.0
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:dom -w @kairo/extension
+
+  database:
+    name: Database isolation tests (RLS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-local-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ci-local-only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run migrations + isolation tests
+        run: |
+          set -o pipefail
+          bash supabase/tests/run_local.sh 2>&1 | tee rls.log
+          grep -q "ALL PURGE TESTS PASSED" rls.log
+          ! grep -q "FAIL" rls.log
+
+  edge-functions:
+    name: Edge Functions type check (Deno)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno check
+        working-directory: supabase/functions
+        run: |
+          for f in generate-message score-profile generate-followup; do
+            (cd "$f" && deno check index.ts)
+          done

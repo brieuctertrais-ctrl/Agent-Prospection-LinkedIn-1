@@ -112,6 +112,9 @@ Avant de vendre l'outil : [`docs/COMMERCIALISATION.md`](docs/COMMERCIALISATION.m
 
 ## Tests
 
+À chaque push, GitHub Actions relance automatiquement tout ce qui suit (`.github/workflows/ci.yml`, aucun secret utilisé) : typecheck, tests, builds, tests DOM LinkedIn (Chromium), tests d'isolation RLS (PostgreSQL), `deno check` des fonctions IA.
+
+
 ```bash
 npm test -w @kairo/shared          # builder d'URL, validation des notes
 npm run test:dom -w @kairo/extension   # scraping + flux d'invitation sur une page fixture (Playwright)
