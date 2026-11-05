@@ -25,8 +25,11 @@ test("normalizeProfileUrl", () => {
 });
 
 test("checkInvitation", () => {
-  assert.ok(checkInvitation("Bonjour Sami, un test gratuit vous tente ?", "Sami").ok);
-  const long = checkInvitation("Bonjour Sami, " + "a".repeat(300), "Sami");
+  assert.ok(checkInvitation("Bonjour Monsieur Besson, un échange vous tente ?", "Vincent", "BESSON").ok);
+  assert.ok(checkInvitation("Bonjour Madame de La Tour, un échange ?", "Anne", "DE LA TOUR").ok);
+  assert.ok(checkInvitation("Bonjour Camille Durand, un échange ?", "Camille", "Durand").ok);
+  const long = checkInvitation("Bonjour Monsieur Besson, " + "a".repeat(300), "Vincent", "Besson");
   assert.deepEqual(long.errors, ["too_long"]);
-  assert.ok(checkInvitation("Salut Sami ?", "Sami").errors.includes("bad_greeting"));
+  assert.ok(checkInvitation("Bonjour Vincent, un échange ?", "Vincent", "Besson").errors.includes("bad_greeting"));
+  assert.ok(checkInvitation("Bonjour Monsieur Martin, ?", "Vincent", "Besson").errors.includes("bad_greeting"));
 });

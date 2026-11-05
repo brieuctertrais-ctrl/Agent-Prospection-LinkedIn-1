@@ -8,6 +8,7 @@ import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClien
 import { complete, sanitizeAiText } from "../_shared/claude.ts";
 import { INVITATION_SYSTEM, invitationPrompt } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
+import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
 
 const MAX_CHARS = 300;
 const MAX_ATTEMPTS = 3;
@@ -47,9 +48,15 @@ Deno.serve(async (req) => {
       await recordAiUsage(supabase, usageId, out.usage);
       text = sanitizeAiText(out.text);
       const chars = [...text].length;
-      if (chars > 0 && chars <= MAX_CHARS) break;
-      feedback = `Ton message fait ${chars} caractères : réécris-le en 260 caractères maximum, en gardant l'élément personnalisé et la question finale.`;
-      text = "";
+      const lastName = lastNameOf(profile.full_name);
+      const greetingValid = greetingOk(text, profile.first_name, lastName);
+      if (chars > 0 && chars <= MAX_CHARS && greetingValid) break;
+      feedback = !greetingValid && chars > 0
+        ? `Le message doit commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, » (capitalisation normale du nom). Réécris-le, 280 caractères maximum.`
+        : `Ton message fait ${chars} caractères : réécris-le en 260 caractères maximum, en gardant la formule « Bonjour Monsieur/Madame <Nom>, », l'élément personnalisé et la question finale.`;
+      // Retry; on the last attempt a note of valid length is still returned (the user can edit it). Never > 300 chars.
+      if (!(chars > 0 && chars <= MAX_CHARS)) text = "";
+      else if (attempt < MAX_ATTEMPTS - 1) text = "";
     }
     if (!text) throw new HttpError(422, "generation_failed");
 

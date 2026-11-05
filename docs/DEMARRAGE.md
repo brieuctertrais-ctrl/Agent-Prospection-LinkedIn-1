@@ -88,7 +88,7 @@ L'interface LinkedIn change souvent ; ce test sert à valider les sélecteurs
 | 2 | **Explorer les profils** | L'onglet ouvre une recherche LinkedIn correspondant au persona (postes, pays, secteurs) | |
 | 3 | — | Un profil s'ouvre ; le panneau affiche nom, titre, entreprise, localisation, photo, score « Match » | |
 | 4 | **✗** | Le profil suivant s'ouvre ; le profil rejeté ne revient jamais | |
-| 5 | **✓ Approuver** | Message ≤ 300 caractères commençant par « Bonjour Prénom, », citant un élément réel du profil | |
+| 5 | **✓ Approuver** | Message ≤ 300 caractères commençant par « Bonjour Monsieur|Madame Nom, », citant un élément réel du profil | |
 | 6 | Copier / Régénérer / Modifier | Copie OK, nouvelle version différente, édition + compteur | |
 | 7 | **Envoyer l'invitation** | LinkedIn : Se connecter → Ajouter une note → note collée → Envoyer ; panneau « ✅ Invitation envoyée » ; profil « En attente » | |
 | 8 | Profil où « Se connecter » est caché dans « Plus » | L'extension passe par le menu « Plus » | |

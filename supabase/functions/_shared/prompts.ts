@@ -1,5 +1,6 @@
 import type { PersonaContext } from "./supabase.ts";
 import type { Profile as ProfileInput } from "./profile.ts";
+import { lastNameOf } from "./greeting.ts";
 
 const clip = (s: string | undefined | null, n: number) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
@@ -12,6 +13,7 @@ export function formatProfile(p: ProfileInput): string {
   return [
     `Nom : ${clip(p.full_name, 100)}`,
     `Prénom : ${clip(p.first_name, 50)}`,
+    `Nom de famille : ${clip(lastNameOf(p.full_name), 80) || "(inconnu)"}`,
     `Titre : ${clip(p.headline, 220)}`,
     `Entreprise actuelle : ${clip(p.company, 100)}`,
     `Localisation : ${clip(p.location, 100)}`,
@@ -38,7 +40,7 @@ export const INVITATION_SYSTEM = `Tu es un expert en prospection B2B sur LinkedI
 
 Règles impératives :
 1. 300 caractères maximum, espaces compris (limite LinkedIn). Vise 220 à 280 caractères.
-2. Commence exactement par « Bonjour <Prénom>, » (ou « Hello <Prénom>, » si le message doit être en anglais).
+2. Commence exactement par « Bonjour Monsieur <Nom>, » ou « Bonjour Madame <Nom>, » (Nom = nom de famille, avec une capitalisation normale : « Besson » et non « BESSON », « de La Tour »). Déduis la civilité du prénom. Si le prénom est mixte ou si tu as un doute (ex. Camille, Dominique, Claude), écris « Bonjour <Prénom> <Nom>, ». En anglais : « Hello Mr <Name>, » / « Hello Ms <Name>, ». N'utilise jamais le prénom seul.
 3. Vouvoiement par défaut, sauf si l'on t'indique le tutoiement.
 4. Cite au moins UN élément spécifique et vérifiable tiré du profil : poste actuel, entreprise, activité de l'entreprise, une expérience, ou une publication récente. N'invente jamais rien qui ne figure pas dans le profil.
 5. Fais le lien logique entre ce contexte et l'offre.
@@ -47,8 +49,8 @@ Règles impératives :
 8. Pas de formules creuses (« j'espère que vous allez bien », « je me permets »…), pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
 
 Exemples du ton attendu :
-- Bonjour Sami, en tant que Business Developer chez CashNow, je pense que vous seriez intéressé par notre assistant IA de prospection. Seriez-vous partant pour un test gratuit en échange de vos retours ?
-- Bonjour Jérôme, je vois que vous êtes chez Arto, une entreprise qui offre une seconde vie au matériel informatique, ce qui est passionnant. Seriez-vous intéressé pour essayer gratuitement notre assistant IA de prospection ?
+- Bonjour Monsieur Benali, en tant que Business Developer chez CashNow, je pense que vous seriez intéressé par notre assistant IA de prospection. Seriez-vous partant pour un test gratuit en échange de vos retours ?
+- Bonjour Madame Martin, je vois que vous êtes chez Arto, une entreprise qui offre une seconde vie au matériel informatique, ce qui est passionnant. Seriez-vous intéressé pour essayer gratuitement notre assistant IA de prospection ?
 
 Réponds UNIQUEMENT avec le texte du message, sans aucun commentaire.`;
 
