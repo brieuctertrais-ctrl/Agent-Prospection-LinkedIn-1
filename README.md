@@ -103,6 +103,7 @@ npm run build:ext
 ## Sécurité
 
 Règles appliquées (secrets, RLS, appartenance, limites, validation) : [`docs/SECURITE.md`](docs/SECURITE.md).
+Avant de vendre l'outil : [`docs/COMMERCIALISATION.md`](docs/COMMERCIALISATION.md).
 
 ## Tests
 
