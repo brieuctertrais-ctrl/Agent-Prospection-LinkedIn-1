@@ -244,7 +244,13 @@ export function App() {
         )}
 
         {showSettings && activePersonaId ? (
-          <CopywritingPanel personaId={activePersonaId} onClose={() => setShowSettings(false)} t={t} />
+          <CopywritingPanel
+            personaId={activePersonaId}
+            onClose={() => setShowSettings(false)}
+            noteMax={noteMax}
+            onNoteMax={setNoteMax}
+            t={t}
+          />
         ) : mode === "autopilot" && persona && showControls && screen.name !== "paused" ? (
           <AutopilotPanel
             persona={persona}
