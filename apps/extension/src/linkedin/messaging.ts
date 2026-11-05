@@ -11,9 +11,16 @@ export const CONNECTIONS_URL = "https://www.linkedin.com/mynetwork/invite-connec
 
 /** Profile URLs of the most recent connections (the page lists newest first). */
 export async function scrapeConnections(max = 120): Promise<string[]> {
-  for (let i = 0; i < 6; i++) {
-    window.scrollBy({ top: 900, behavior: "smooth" });
-    await sleep(500 + Math.random() * 400);
+  // LinkedIn shows ~10 connections first: scroll and click "Show more results" a few times (~40 in total).
+  for (let round = 0; round < 4; round++) {
+    for (let i = 0; i < 4; i++) {
+      window.scrollBy({ top: 900, behavior: "smooth" });
+      await sleep(500 + Math.random() * 400);
+    }
+    const more = deepButton(document, ["Afficher plus de résultats", "Show more results", "Voir plus", "Show more"]);
+    if (!more) break;
+    more.click();
+    await sleep(1500 + Math.random() * 1000);
   }
   const urls = new Set<string>();
   for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']"))) {
