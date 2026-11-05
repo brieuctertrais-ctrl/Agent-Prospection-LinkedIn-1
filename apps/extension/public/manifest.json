@@ -4,20 +4,44 @@
   "short_name": "EFI Prospection",
   "version": "0.1.0",
   "description": "Le Tinder de la prospection : valide les profils LinkedIn, l'IA rédige ton message d'invitation.",
-  "icons": { "128": "icon-128.png" },
-  "action": { "default_title": "EFI Prospection" },
-  "side_panel": { "default_path": "sidepanel.html" },
-  "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["sidePanel", "storage", "tabs", "alarms"],
-  "host_permissions": ["https://www.linkedin.com/*"],
+  "icons": {
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_title": "EFI Prospection"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "externally_connectable": {
-    "matches": ["http://localhost:3000/*", "https://app.example.com/*"]
+    "matches": [
+      "http://localhost:3000/*",
+      "https://app.example.com/*"
+    ]
   }
 }

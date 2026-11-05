@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, Pause, RefreshCw, Send, Sparkles } from "lucide-react";
+import { ExternalLink, Pause, Play, RefreshCw, Sparkles } from "lucide-react";
 import type { Persona } from "@kairo/shared";
-import { batchCounts, prepareBatch, sendApproved, type PrepareEnd, type SendEnd } from "../lib/autopilot";
+import { batchCounts, inWorkingHours, prepareBatch, resumeCampaigns, type PrepareEnd } from "../lib/autopilot";
+import { getAuto, onAutoChange, patchAuto, type AutoState } from "../lib/autostate";
 import type { Settings } from "../lib/engine";
 import { getLinkedInTab } from "../lib/tabs";
 import { fetchPersona } from "../lib/api";
@@ -33,10 +34,16 @@ export function AutopilotPanel({
   const [status, setStatus] = useState<string>();
   const [accept, setAccept] = useState(false);
   const stop = useRef(false);
+  const [auto, setAuto] = useState<AutoState | null>(null);
 
   const refresh = useCallback(async () => setCounts(await batchCounts()), []);
   useEffect(() => {
     void refresh();
+    void getAuto().then(setAuto);
+    return onAutoChange((a) => {
+      setAuto(a);
+      void refresh();
+    });
   }, [refresh]);
 
   if (!settings.autopilot_warning_accepted_at) {
@@ -126,40 +133,26 @@ export function AutopilotPanel({
       );
     });
 
-  const send = () =>
-    withTab(async (tabId) => {
-      setRunning("sending");
-      setStatus(t("ap.sending", { sent: 0, failed: 0 }));
-      const r = await sendApproved({
-        tabId,
-        settings,
-        noteMax,
-        shouldStop: () => stop.current,
-        onProgress: (p) => {
-          setStatus(t("ap.sending", { sent: p.sent, failed: p.failed }) + (p.waitSeconds ? ` ${t("ap.next", { s: p.waitSeconds })}` : ""));
-          if (p.noteLimit) {
-            onNoteMax(p.noteLimit);
-            void patchState({ noteMaxChars: p.noteLimit });
-          }
-        },
-      });
-      const key: Record<SendEnd, string> = {
-        done: "ap.end.done",
-        outside_hours: "ap.end.outside_hours",
-        quota: "ap.end.quota",
-        paused: "panel.paused",
-        paused_by_user: "ap.end.paused_by_user",
-        stopped: "ap.end.stopped",
-        error: "ap.end.error",
-      };
-      setStatus(
-        r.end === "paused"
-          ? t("panel.paused", { reason: t(`send.${r.code}`) })
-          : r.end === "error"
-            ? t("ap.end.error", { error: t("err.generic") })
-            : t(key[r.end], { sent: r.sent, failed: r.failed }),
-      );
-    });
+  const toggleAuto = async (on: boolean) => {
+    if (on) {
+      await resumeCampaigns();
+      await patchState({ pausedReason: undefined });
+      await patchAuto({ enabled: true, nextAt: undefined, notified: undefined });
+      await chrome.runtime.sendMessage({ type: "AUTOPILOT_TICK" }).catch(() => undefined);
+    } else {
+      await patchAuto({ enabled: false });
+    }
+  };
+
+  const autoLine = (a: AutoState) => {
+    const parts = [t("ap.auto.today", { sent: a.day === new Date().toISOString().slice(0, 10) ? a.sentToday : 0, failed: a.failedToday })];
+    if (a.last) parts.push(t(`ap.auto.last.${a.last}`, { code: a.lastCode ? t(`send.${a.lastCode}`) : "" }));
+    if (a.enabled && a.nextAt && a.nextAt > Date.now()) {
+      parts.push(t("ap.auto.next", { time: new Date(a.nextAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) }));
+    }
+    if (a.enabled && !inWorkingHours(settings)) parts.push(t("ap.auto.outside", { start: settings.work_start_hour ?? 9, end: settings.work_end_hour ?? 19 }));
+    return parts.join(" ");
+  };
 
   const busy = running !== "idle";
 
@@ -210,16 +203,28 @@ export function AutopilotPanel({
             <p className="font-semibold">{t("ap.step3")}</p>
             <p className="text-sm text-slate-300">{t("ap.approved", { n: counts.approved })}</p>
             <p className="text-xs text-slate-400">
-              {t("ap.sendHelp", {
+              {t("ap.autoHelp", {
                 min: settings.min_delay_seconds ?? 45,
                 max: settings.max_delay_seconds ?? 180,
                 start: settings.work_start_hour ?? 9,
                 end: settings.work_end_hour ?? 19,
               })}
             </p>
-            <GoldButton className="w-full" onClick={send} disabled={counts.approved === 0}>
-              <Send className="h-4 w-4" /> {t("ap.send")}
-            </GoldButton>
+            {auto && (
+              <div className={`rounded-xl p-3 text-xs ${auto.enabled ? "bg-emerald-500/10 text-emerald-200" : "bg-navy-dark text-slate-300"}`}>
+                <p className="mb-1 font-semibold">{auto.enabled ? t("ap.auto.on") : t("ap.auto.off")}</p>
+                <p>{autoLine(auto)}</p>
+              </div>
+            )}
+            {auto?.enabled ? (
+              <GhostButton className="w-full" onClick={() => toggleAuto(false)}>
+                <Pause className="h-4 w-4" /> {t("ap.auto.stop")}
+              </GhostButton>
+            ) : (
+              <GoldButton className="w-full" onClick={() => toggleAuto(true)}>
+                <Play className="h-4 w-4" /> {t("ap.auto.start")}
+              </GoldButton>
+            )}
           </section>
 
           <button onClick={() => void refresh()} className="mx-auto flex items-center gap-1 text-xs text-slate-400 hover:text-gold">

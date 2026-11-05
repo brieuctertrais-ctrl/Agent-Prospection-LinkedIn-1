@@ -97,23 +97,15 @@ export async function prepareBatch(opts: {
   return { prepared, end: "done" };
 }
 
-// ---------------------------------------------------------------- sending
+// ---------------------------------------------------------------- sending (one step at a time)
 
-export type SendEnd =
-  | "done"
-  | "outside_hours"
-  | "quota"
-  | "paused"
-  | "paused_by_user"
-  | "stopped"
-  | "error";
-
-export interface SendProgress {
-  sent: number;
-  failed: number;
-  waitSeconds?: number;
-  noteLimit?: number;
-}
+/** Result of one sending step. The background worker calls sendOne() repeatedly, spaced by a random delay. */
+export type StepResult =
+  | { kind: "sent"; noteLimit?: number }
+  | { kind: "failed"; code: string; noteLimit?: number }
+  /** LinkedIn warning / limit / check, or interface change: everything stops until the user resumes. */
+  | { kind: "paused"; code: string }
+  | { kind: "idle"; reason: "none" | "outside_hours" | "quota" | "paused_by_user" };
 
 /** Hour (0-23) and ISO weekday (1 = Monday … 7 = Sunday) in the user's timezone. */
 function localTime(tz: string): { hour: number; weekday: number } {
@@ -137,7 +129,7 @@ export function inWorkingHours(s: Settings): boolean {
 }
 
 /** Daily cap with a 2-week warm-up: starts at 5/day and grows linearly to the configured quota. */
-async function dailyCap(s: Settings): Promise<number> {
+export async function dailyCap(s: Settings): Promise<number> {
   const quota = s.daily_invitations ?? 20;
   const { data } = await supabase
     .from("action_logs")
@@ -153,127 +145,89 @@ async function dailyCap(s: Settings): Promise<number> {
   return Math.min(quota, 5 + Math.floor((days * Math.max(0, quota - 5)) / 14));
 }
 
-export async function sendApproved(opts: {
-  tabId: number;
-  settings: Settings;
-  noteMax: number;
-  onProgress: (p: SendProgress) => void;
-  shouldStop: () => boolean;
-}): Promise<{ end: SendEnd; code?: string } & SendProgress> {
-  const progress: SendProgress = { sent: 0, failed: 0 };
-  let noteMax = opts.noteMax;
+/** Random human delay (seconds) before the next invitation. */
+export function nextDelaySeconds(s: Settings): number {
+  const min = Math.max(30, s.min_delay_seconds ?? 45);
+  const max = Math.max(min, s.max_delay_seconds ?? 180);
+  return Math.round(min + Math.random() * (max - min));
+}
 
-  // A previous run that was interrupted may have left a campaign "running" (own rows only; RLS applies too).
+/** Called when the user (re)starts automatic sending: campaigns paused earlier become eligible again. */
+export async function resumeCampaigns(): Promise<void> {
   const uid = await userId();
-  await supabase.from("campaigns").update({ status: "paused", paused_reason: "interrupted" }).eq("user_id", uid).eq("status", "running");
+  await supabase.from("campaigns").update({ status: "draft", paused_reason: null }).eq("user_id", uid).eq("status", "paused");
+}
 
-  let currentCampaign: string | null = null;
-  const setCampaign = async (status: string, reason?: string) => {
-    if (currentCampaign) await supabase.from("campaigns").update({ status, paused_reason: reason ?? null }).eq("id", currentCampaign);
-  };
+/** Sends at most ONE approved invitation, after every safeguard check. */
+export async function sendOne(tabId: number, settings: Settings, noteMax: number): Promise<StepResult> {
+  if (!inWorkingHours(settings)) return { kind: "idle", reason: "outside_hours" };
+  const [day, week, cap] = await Promise.all([countToday("invitation"), countWeek("invitation"), dailyCap(settings)]);
+  if (day >= cap || week >= (settings.weekly_invitations ?? 100)) return { kind: "idle", reason: "quota" };
 
-  for (;;) {
-    if (opts.shouldStop()) {
-      await setCampaign("paused", "stopped_by_user");
-      return { end: "stopped", ...progress };
-    }
-    if (!inWorkingHours(opts.settings)) {
-      await setCampaign("paused", "outside_hours");
-      return { end: "outside_hours", ...progress };
-    }
-    const [day, week, cap] = await Promise.all([countToday("invitation"), countWeek("invitation"), dailyCap(opts.settings)]);
-    if (day >= cap || week >= (opts.settings.weekly_invitations ?? 100)) {
-      await setCampaign("paused", "quota");
-      return { end: "quota", ...progress };
-    }
-
-    // Next approved invitation (oldest first).
-    const { data: item } = await supabase
-      .from("action_queue")
-      .select("id, prospect_id, campaign_id, payload, attempts")
-      .eq("status", "pending")
-      .eq("action_type", "invitation")
-      .eq("payload->>needs_approval", "false")
-      .order("scheduled_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (!item) {
-      await setCampaign("finished");
-      return { end: "done", ...progress };
-    }
-
-    // One running campaign at a time; the user can pause it from the dashboard.
-    if (item.campaign_id && item.campaign_id !== currentCampaign) {
-      await setCampaign("finished");
-      currentCampaign = item.campaign_id;
-      const { error } = await supabase.from("campaigns").update({ status: "running", paused_reason: null }).eq("id", currentCampaign);
-      if (error) return { end: "error", code: "generic", ...progress };
-    } else if (currentCampaign) {
-      const { data: c } = await supabase.from("campaigns").select("status").eq("id", currentCampaign).single();
-      if (c?.status === "paused") return { end: "paused_by_user", ...progress };
-    }
-
-    const messageId = (item.payload as { message_id?: string })?.message_id;
-    const [{ data: prospect }, { data: message }] = await Promise.all([
-      supabase.from("prospects").select("linkedin_url").eq("id", item.prospect_id).single(),
-      supabase.from("messages").select("text").eq("id", messageId ?? "").single(),
-    ]);
-    const fail = async (code: string) => {
-      await supabase.from("action_queue").update({ status: "failed", error: code.slice(0, 200), attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
-      await logAction("invitation", "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
-      progress.failed += 1;
-      opts.onProgress({ ...progress });
-    };
-    if (!prospect || !message) {
-      await fail("missing_data");
-      continue;
-    }
-    if ([...message.text].length > noteMax) {
-      await fail("note_too_long");
-      continue;
-    }
-
-    await navigate(opts.tabId, prospect.linkedin_url);
-    await sleep(2500 + Math.random() * 2500);
-    const res = await sendToTab(opts.tabId, { type: "SEND_INVITATION", note: message.text });
-
-    if (res.ok && res.type === "INVITATION_SENT") {
-      await supabase.from("action_queue").update({ status: "done", attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
-      await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("prospect_id", item.prospect_id);
-      await logAction("invitation", "success", { autopilot: true, campaign_id: currentCampaign }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
-      progress.sent += 1;
-      if (res.noteLimit && res.noteLimit !== noteMax) {
-        noteMax = Math.max(150, Math.min(300, res.noteLimit));
-        progress.noteLimit = noteMax;
-      }
-      opts.onProgress({ ...progress });
-    } else if (!res.ok) {
-      if (res.code === "note_too_long") {
-        noteMax = Math.max(150, Math.min(300, Number(res.detail) || noteMax));
-        progress.noteLimit = noteMax;
-      }
-      await fail(res.code);
-      if (PAUSE_CODES.has(res.code)) {
-        // LinkedIn warning, limit or check: stop everything, the user resumes manually.
-        await setCampaign("paused", res.code);
-        await patchState({ pausedReason: res.code });
-        await logAction("pause", "skipped", { code: res.code, autopilot: true });
-        return { end: "paused", code: res.code, ...progress };
-      }
-    }
-
-    // Human pace between two invitations.
-    const min = Math.max(30, opts.settings.min_delay_seconds ?? 45);
-    const max = Math.max(min, opts.settings.max_delay_seconds ?? 180);
-    let wait = Math.round(min + Math.random() * (max - min));
-    while (wait > 0) {
-      if (opts.shouldStop()) {
-        await setCampaign("paused", "stopped_by_user");
-        return { end: "stopped", ...progress };
-      }
-      opts.onProgress({ ...progress, waitSeconds: wait });
-      await sleep(1000);
-      wait -= 1;
-    }
+  const uid = await userId();
+  const { data: item } = await supabase
+    .from("action_queue")
+    .select("id, prospect_id, campaign_id, payload, attempts, campaign:campaigns(status)")
+    .eq("status", "pending")
+    .eq("action_type", "invitation")
+    .eq("payload->>needs_approval", "false")
+    .order("scheduled_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!item) {
+    await supabase.from("campaigns").update({ status: "finished" }).eq("user_id", uid).eq("status", "running");
+    return { kind: "idle", reason: "none" };
   }
+
+  // Paused from the dashboard: do not send until the user restarts automatic sending.
+  const campaign = (Array.isArray(item.campaign) ? item.campaign[0] : item.campaign) as { status?: string } | null;
+  if (campaign?.status === "paused") return { kind: "idle", reason: "paused_by_user" };
+
+  // One running campaign at a time.
+  if (item.campaign_id && campaign?.status !== "running") {
+    await supabase.from("campaigns").update({ status: "draft" }).eq("user_id", uid).eq("status", "running");
+    const { error } = await supabase.from("campaigns").update({ status: "running", paused_reason: null }).eq("id", item.campaign_id);
+    if (error) return { kind: "failed", code: "campaign_conflict" };
+  }
+
+  const messageId = (item.payload as { message_id?: string })?.message_id;
+  const [{ data: prospect }, { data: message }] = await Promise.all([
+    supabase.from("prospects").select("linkedin_url").eq("id", item.prospect_id).single(),
+    supabase.from("messages").select("text").eq("id", messageId ?? "").single(),
+  ]);
+  const fail = async (code: string) => {
+    await supabase.from("action_queue").update({ status: "failed", error: code.slice(0, 200), attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
+    await logAction("invitation", "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
+  };
+  if (!prospect || !message) {
+    await fail("missing_data");
+    return { kind: "failed", code: "missing_data" };
+  }
+  if ([...message.text].length > noteMax) {
+    await fail("note_too_long");
+    return { kind: "failed", code: "note_too_long" };
+  }
+
+  await navigate(tabId, prospect.linkedin_url);
+  await sleep(2500 + Math.random() * 2500);
+  const res = await sendToTab(tabId, { type: "SEND_INVITATION", note: message.text });
+
+  if (res.ok && res.type === "INVITATION_SENT") {
+    await supabase.from("action_queue").update({ status: "done", attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
+    await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("prospect_id", item.prospect_id);
+    await logAction("invitation", "success", { autopilot: true, campaign_id: item.campaign_id }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
+    return { kind: "sent", noteLimit: res.noteLimit };
+  }
+  if (res.ok) return { kind: "failed", code: "unknown" };
+
+  await fail(res.code);
+  if (PAUSE_CODES.has(res.code)) {
+    // LinkedIn warning, limit or check: stop everything, the user resumes manually (never worked around).
+    if (item.campaign_id) await supabase.from("campaigns").update({ status: "paused", paused_reason: res.code }).eq("id", item.campaign_id);
+    await patchState({ pausedReason: res.code });
+    await logAction("pause", "skipped", { code: res.code, autopilot: true });
+    return { kind: "paused", code: res.code };
+  }
+  const noteLimit = res.code === "note_too_long" ? Math.max(150, Math.min(300, Number(res.detail) || noteMax)) : undefined;
+  return { kind: "failed", code: res.code, noteLimit };
 }

@@ -3,8 +3,21 @@ import { supabase } from "../lib/supabase";
 import { patchState } from "../lib/storage";
 import { WEB_APP_URL } from "../lib/config";
 
+import { ALARM, scheduleAlarm, tick } from "./sender";
+
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+});
+// Every time the service worker starts (install, browser start, wake-up): make sure the alarm exists.
+void scheduleAlarm();
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === ALARM) void tick();
+});
+// Panel asks for an immediate step (e.g. right after switching automatic sending on).
+chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
+  if (msg?.type === "AUTOPILOT_TICK") {
+    void scheduleAlarm().then(tick);
+  }
 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
