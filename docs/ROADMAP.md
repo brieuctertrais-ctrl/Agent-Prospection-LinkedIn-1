@@ -3,7 +3,7 @@
 Le schéma de base est déjà prêt pour ces étapes (`campaigns`, `action_queue`, `messages.kind`,
 `user_settings` : quotas, plages horaires, `withdraw_pending_after_days`, `autopilot_warning_accepted_at`).
 
-## 1. Autopilote
+## 1. Autopilote (étape A livrée : lots validés dans le dashboard + envoi rythmé)
 - Lancement d'une campagne (persona + copywriting + quotas) ; index unique : une seule campagne `running` par compte.
 - Boucle dans l'extension (`chrome.alarms`) : uniquement pendant les plages horaires / jours ouvrés du fuseau de l'utilisateur,
   délais aléatoires `min_delay_seconds`–`max_delay_seconds`, compteurs `count_actions_today` / `count_actions_week`.

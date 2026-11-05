@@ -18,7 +18,8 @@ pour des dizaines de messages).
    - le `Reference ID` du projet (Project Settings → General)
 3. **SQL Editor → New query** : colle le contenu de
    `supabase/migrations/20261104000000_init.sql` puis **Run** ; recommence avec
-   `supabase/migrations/20261105000000_security_hardening.sql` (dans cet ordre, sans erreur).
+   `supabase/migrations/20261105000000_security_hardening.sql`, puis
+   `supabase/migrations/20261106000000_autopilot_batch.sql` (dans cet ordre, sans erreur).
 4. **Authentication → URL Configuration** :
    - Site URL : `http://localhost:3000`
    - Redirect URLs : ajoute `http://localhost:3000/auth/callback`

@@ -58,7 +58,9 @@ supabase/          Migration SQL (tables + RLS + fonctions), Edge Functions IA (
 | RGPD : purge des prospects rejetés après N mois (`purge_rejected_prospects`), liste d'exclusion | ✅ |
 | Essai 7 jours sans CB (créé automatiquement à l'inscription) | ✅ (Stripe à brancher) |
 
-Phase 2 (schéma déjà prêt : `campaigns`, `action_queue`, `messages.kind = followup_*`) : voir [`docs/ROADMAP.md`](docs/ROADMAP.md).
+| Autopilote — étape A : préparation d'un lot (10/15/20 profils, rien n'est envoyé), validation dans le dashboard (`/autopilot` : corriger, valider, rejeter, annuler, mettre en pause), puis envoi à rythme humain (plages horaires, délais aléatoires, quotas jour/semaine, montée en charge sur 2 semaines, arrêt sur tout avertissement LinkedIn, une campagne active à la fois) | ✅ |
+
+Suite (suivi des acceptations, relances, détection des réponses) : voir [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Installation
 

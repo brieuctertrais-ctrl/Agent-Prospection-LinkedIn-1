@@ -12,6 +12,13 @@ export interface Settings {
   daily_invitations: number;
   weekly_invitations: number;
   min_match_score: number;
+  min_delay_seconds?: number;
+  max_delay_seconds?: number;
+  work_start_hour?: number;
+  work_end_hour?: number;
+  work_days?: number[];
+  timezone?: string;
+  autopilot_warning_accepted_at?: string | null;
 }
 
 export type NextResult =

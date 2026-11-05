@@ -21,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         labels={{
           personas: t("nav.personas"),
           leads: t("nav.leads"),
+          autopilot: t("nav.autopilot"),
           knowledge: t("nav.knowledge"),
           tuto: t("nav.tuto"),
           settings: t("nav.settings"),

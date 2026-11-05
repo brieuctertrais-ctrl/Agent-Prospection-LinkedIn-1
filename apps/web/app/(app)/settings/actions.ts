@@ -14,6 +14,8 @@ const SettingsSchema = z
     weekly_invitations: int(1, 200),
     daily_messages: int(1, 150),
     min_match_score: int(0, 100),
+    min_delay_seconds: int(30, 600),
+    max_delay_seconds: int(30, 1800),
     work_start_hour: int(0, 23),
     work_end_hour: int(1, 24),
     timezone: z.string().trim().min(1).max(64).refine((tz) => {
@@ -25,7 +27,7 @@ const SettingsSchema = z
       }
     }),
   })
-  .refine((s) => s.work_end_hour > s.work_start_hour);
+  .refine((s) => s.work_end_hour > s.work_start_hour && s.max_delay_seconds >= s.min_delay_seconds);
 
 export async function saveSettings(fd: FormData) {
   const parsed = SettingsSchema.safeParse(Object.fromEntries(fd));

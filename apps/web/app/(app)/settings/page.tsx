@@ -13,6 +13,8 @@ const FIELDS = [
   ["weekly_invitations", "Invitations / semaine"],
   ["daily_messages", "Messages / jour"],
   ["min_match_score", "Score minimum de correspondance (0-100)"],
+  ["min_delay_seconds", "Délai minimum entre deux invitations (s)"],
+  ["max_delay_seconds", "Délai maximum entre deux invitations (s)"],
   ["work_start_hour", "Début de plage horaire (h)"],
   ["work_end_hour", "Fin de plage horaire (h)"],
 ] as const;

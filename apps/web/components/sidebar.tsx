@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, GraduationCap, LogOut, Settings, Users, UserCheck } from "lucide-react";
+import { Bot, BookOpen, GraduationCap, LogOut, Settings, Users, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { Badge } from "./ui/badge";
@@ -11,7 +11,7 @@ export function Sidebar({
   newLeads,
   user,
 }: {
-  labels: Record<"personas" | "leads" | "knowledge" | "tuto" | "settings" | "logout" | "new", string>;
+  labels: Record<"personas" | "leads" | "autopilot" | "knowledge" | "tuto" | "settings" | "logout" | "new", string>;
   newLeads: number;
   user: { name: string; email: string };
 }) {
@@ -19,6 +19,7 @@ export function Sidebar({
   const items = [
     { href: "/personas", label: labels.personas, icon: Users },
     { href: "/leads", label: labels.leads, icon: UserCheck, badge: newLeads > 0 },
+    { href: "/autopilot", label: labels.autopilot, icon: Bot },
     { href: "/knowledge", label: labels.knowledge, icon: BookOpen },
     { href: "/tuto", label: labels.tuto, icon: GraduationCap },
   ];

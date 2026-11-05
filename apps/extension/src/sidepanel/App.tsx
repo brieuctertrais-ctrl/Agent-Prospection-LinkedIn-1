@@ -10,6 +10,7 @@ import { WEB_APP_URL } from "../lib/config";
 import { Bubble, Conversation, GhostButton, GoldButton, Header, Mascot } from "./components";
 import { MessageCard } from "./MessageCard";
 import { CopywritingPanel } from "./CopywritingPanel";
+import { AutopilotPanel } from "./AutopilotPanel";
 
 type Screen =
   | { name: "loading" }
@@ -102,11 +103,7 @@ export function App() {
   };
 
   const changeMode = async (m: Mode) => {
-    if (m === "autopilot") {
-      // Phase 2: autopilot campaigns. Show the ToS warning and stay in copilot for now.
-      setNotice(`${t("panel.autopilotWarning")} ${t("panel.autopilotSoon")}`);
-      return;
-    }
+    setNotice(undefined);
     setMode(m);
     await patchState({ mode: m });
   };
@@ -153,7 +150,7 @@ export function App() {
         text: r.text,
         originalText: r.text,
         messageId: r.message_id,
-        leadId: r.lead_id,
+        leadId: r.lead_id ?? "",
         prospectId: r.prospect_id,
         sendState: "idle",
       });
@@ -244,6 +241,15 @@ export function App() {
 
         {showSettings && activePersonaId ? (
           <CopywritingPanel personaId={activePersonaId} onClose={() => setShowSettings(false)} t={t} />
+        ) : mode === "autopilot" && persona && showControls && screen.name !== "paused" ? (
+          <AutopilotPanel
+            persona={persona}
+            settings={settings}
+            onSettings={setSettings}
+            noteMax={noteMax}
+            onNoteMax={setNoteMax}
+            t={t}
+          />
         ) : (
           <ScreenView
             screen={screen}

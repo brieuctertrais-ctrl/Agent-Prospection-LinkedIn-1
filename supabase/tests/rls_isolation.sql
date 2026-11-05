@@ -89,3 +89,38 @@ set role anon;
 select pg_temp.expect((select count(*) from personas) + (select count(*) from leads) + (select count(*) from profiles) = 0, 'anon reads nothing');
 reset role;
 \echo ALL RLS TESTS PASSED
+
+-- ===== Autopilot batch (review_batch) =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+insert into prospects (id, user_id, persona_id, linkedin_url, full_name)
+  values ('20000000-0000-0000-0000-0000000000a2', auth.uid(), '10000000-0000-0000-0000-00000000000a', 'https://www.linkedin.com/in/alice2/', 'Alice Deux'),
+         ('20000000-0000-0000-0000-0000000000a3', auth.uid(), '10000000-0000-0000-0000-00000000000a', 'https://www.linkedin.com/in/alice3/', 'Alice Trois');
+insert into messages (id, user_id, prospect_id, text) values
+  ('30000000-0000-0000-0000-0000000000a2', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'Bonjour Madame Deux, test ?'),
+  ('30000000-0000-0000-0000-0000000000a3', auth.uid(), '20000000-0000-0000-0000-0000000000a3', 'Bonjour Madame Trois, test ?');
+insert into campaigns (id, user_id, persona_id, batch_validation) values ('60000000-0000-0000-0000-00000000000a', auth.uid(), '10000000-0000-0000-0000-00000000000a', true);
+insert into action_queue (id, user_id, campaign_id, prospect_id, action_type, payload) values
+  ('70000000-0000-0000-0000-0000000000a2', auth.uid(), '60000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-0000000000a2', 'invitation', '{"needs_approval": true, "message_id": "30000000-0000-0000-0000-0000000000a2"}'),
+  ('70000000-0000-0000-0000-0000000000a3', auth.uid(), '60000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-0000000000a3', 'invitation', '{"needs_approval": true, "message_id": "30000000-0000-0000-0000-0000000000a3"}');
+select pg_temp.expect((select count(*) from filter_new_profiles(array['https://www.linkedin.com/in/alice2/','https://www.linkedin.com/in/new/'])) = 1, 'profile in a pending batch is not proposed again');
+select pg_temp.expect_error($$insert into action_queue (user_id, action_type) values (auth.uid(), 'drop_table')$$, 'unknown queue action rejected');
+
+-- B cannot review A's batch
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect(review_batch(array['70000000-0000-0000-0000-0000000000a2']::uuid[], array['70000000-0000-0000-0000-0000000000a3']::uuid[]) = 0, 'B review_batch on A items does nothing');
+select pg_temp.expect_error($$insert into action_queue (user_id, campaign_id, action_type) values (auth.uid(), '60000000-0000-0000-0000-00000000000a', 'invitation')$$, 'B cannot add to A campaign');
+
+-- A approves one, rejects the other
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select payload->>'needs_approval' from action_queue where id = '70000000-0000-0000-0000-0000000000a2') = 'true', 'A items untouched by B');
+select pg_temp.expect(review_batch(array['70000000-0000-0000-0000-0000000000a2']::uuid[], array['70000000-0000-0000-0000-0000000000a3']::uuid[]) = 2, 'A reviews own batch');
+select pg_temp.expect((select payload->>'needs_approval' from action_queue where id = '70000000-0000-0000-0000-0000000000a2') = 'false', 'approved item ready to send');
+select pg_temp.expect((select count(*) from leads where prospect_id = '20000000-0000-0000-0000-0000000000a2' and message_id = '30000000-0000-0000-0000-0000000000a2') = 1, 'approved item creates the lead');
+select pg_temp.expect((select status from action_queue where id = '70000000-0000-0000-0000-0000000000a3') = 'cancelled', 'rejected item cancelled');
+select pg_temp.expect((select count(*) from exclusion_list where linkedin_url = 'https://www.linkedin.com/in/alice3/') = 1, 'rejected profile excluded');
+insert into campaigns (user_id, persona_id, status) values (auth.uid(), '10000000-0000-0000-0000-00000000000a', 'running');
+select pg_temp.expect_error($$insert into campaigns (user_id, persona_id, status) values (auth.uid(), '10000000-0000-0000-0000-00000000000a', 'running')$$, 'only one running campaign per account');
+reset role;
+\echo ALL AUTOPILOT TESTS PASSED

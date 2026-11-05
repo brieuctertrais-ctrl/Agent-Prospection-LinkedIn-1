@@ -19,6 +19,9 @@ const BodySchema = z.object({
   previous_text: z.string().max(600).optional(),
   // Note limit detected on the user's LinkedIn account (200 free / 300 Premium). Can only lower the cap.
   max_chars: z.number().int().min(150).max(LINKEDIN_MAX).default(LINKEDIN_MAX),
+  // "approve": the user approved the profile (copilot). "proposal": autopilot batch, reviewed later
+  // in the dashboard — no decision and no lead are created until the user approves.
+  mode: z.enum(["approve", "proposal"]).default("approve"),
 });
 
 Deno.serve(async (req) => {
@@ -34,11 +37,13 @@ Deno.serve(async (req) => {
     const ctx = await loadPersonaContext(supabase, userId, body.persona_id);
     const prospectId = await upsertProspect(supabase, userId, body.persona_id, profile);
 
-    const { error: decErr } = await supabase.from("decisions").upsert(
-      { user_id: userId, prospect_id: prospectId, persona_id: body.persona_id, decision: "approve" },
-      { onConflict: "user_id,prospect_id" },
-    );
-    if (decErr) throw new Error(`decision_failed: ${decErr.code}`);
+    if (body.mode === "approve") {
+      const { error: decErr } = await supabase.from("decisions").upsert(
+        { user_id: userId, prospect_id: prospectId, persona_id: body.persona_id, decision: "approve" },
+        { onConflict: "user_id,prospect_id" },
+      );
+      if (decErr) throw new Error(`decision_failed: ${decErr.code}`);
+    }
 
     // Generate; if over the LinkedIn limit, ask the model to shorten. Never return more than MAX_CHARS.
     const MAX_CHARS = body.max_chars;
@@ -87,6 +92,10 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (msgErr) throw new Error(`message_insert_failed: ${msgErr.code}`);
+
+    if (body.mode === "proposal") {
+      return json({ prospect_id: prospectId, lead_id: null, message_id: message.id, text, chars: [...text].length, version });
+    }
 
     const { data: lead, error: leadErr } = await supabase
       .from("leads")
