@@ -1,31 +1,40 @@
 "use server";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireUser } from "@/lib/supabase/server";
 
-const int = (fd: FormData, k: string, min: number, max: number) => {
-  const n = Math.round(Number(fd.get(k)));
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : undefined;
-};
+const int = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
+
+const SettingsSchema = z
+  .object({
+    locale: z.enum(["fr", "en"]),
+    daily_profile_views: int(1, 300),
+    daily_invitations: int(1, 100),
+    weekly_invitations: int(1, 200),
+    daily_messages: int(1, 150),
+    min_match_score: int(0, 100),
+    work_start_hour: int(0, 23),
+    work_end_hour: int(1, 24),
+    timezone: z.string().trim().min(1).max(64).refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  })
+  .refine((s) => s.work_end_hour > s.work_start_hour);
 
 export async function saveSettings(fd: FormData) {
+  const parsed = SettingsSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return;
+  const { locale, ...settings } = parsed.data;
   const { supabase, user } = await requireUser();
-  const locale = fd.get("locale") === "en" ? "en" : "fr";
-  (await cookies()).set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  (await cookies()).set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", secure: process.env.NODE_ENV === "production" });
   await supabase.from("profiles").update({ locale }).eq("id", user.id);
-  await supabase
-    .from("user_settings")
-    .update({
-      daily_profile_views: int(fd, "daily_profile_views", 1, 300),
-      daily_invitations: int(fd, "daily_invitations", 1, 100),
-      weekly_invitations: int(fd, "weekly_invitations", 1, 200),
-      daily_messages: int(fd, "daily_messages", 1, 150),
-      min_match_score: int(fd, "min_match_score", 0, 100),
-      work_start_hour: int(fd, "work_start_hour", 0, 23),
-      work_end_hour: int(fd, "work_end_hour", 1, 24),
-      timezone: String(fd.get("timezone") || "Europe/Paris").slice(0, 64),
-    })
-    .eq("user_id", user.id);
+  await supabase.from("user_settings").update(settings).eq("user_id", user.id);
   revalidatePath("/", "layout");
 }
 

@@ -1,18 +1,7 @@
 import type { PersonaContext } from "./supabase.ts";
+import type { Profile as ProfileInput } from "./profile.ts";
 
-export interface ProfileInput {
-  linkedin_url: string;
-  full_name: string;
-  first_name: string;
-  headline: string;
-  company: string;
-  location: string;
-  about: string;
-  experiences: { title: string; company: string; dates?: string; description?: string }[];
-  recent_activity: string[];
-}
-
-const clip = (s: string | undefined, n: number) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+const clip = (s: string | undefined | null, n: number) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
 export function formatProfile(p: ProfileInput): string {
   const exps = p.experiences

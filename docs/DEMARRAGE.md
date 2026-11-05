@@ -16,11 +16,17 @@ pour des dizaines de messages).
    - la clé `anon` / `publishable`
    - la clé `service_role` / `secret` (⚠️ secrète : ne jamais la partager ni la mettre dans l'extension)
    - le `Reference ID` du projet (Project Settings → General)
-3. **SQL Editor → New query** : colle tout le contenu de
-   `supabase/migrations/20261104000000_init.sql` puis **Run**. (Doit se terminer sans erreur.)
+3. **SQL Editor → New query** : colle le contenu de
+   `supabase/migrations/20261104000000_init.sql` puis **Run** ; recommence avec
+   `supabase/migrations/20261105000000_security_hardening.sql` (dans cet ordre, sans erreur).
 4. **Authentication → URL Configuration** :
    - Site URL : `http://localhost:3000`
    - Redirect URLs : ajoute `http://localhost:3000/auth/callback`
+
+5. **Anti-robot (captcha)** : crée un widget gratuit sur https://dash.cloudflare.com → Turnstile
+   (domaine `localhost`). Colle la clé **secrète** dans Supabase → Authentication → Attack Protection
+   (captcha *Turnstile*), et garde la clé **site** pour l'étape 4.
+6. **Authentication → Rate Limits** : reprends les valeurs de `supabase/config.toml`.
 
 ## 2. Créer la clé API Claude
 1. Crée un compte sur https://console.anthropic.com, ajoute un moyen de paiement (ou des crédits).
@@ -42,7 +48,8 @@ La clé Claude reste ainsi côté serveur (jamais dans l'extension ni dans le na
 cp apps/web/.env.example apps/web/.env.local
 ```
 Remplis `apps/web/.env.local` : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY` (laisse `NEXT_PUBLIC_EXTENSION_ID` vide pour l'instant), puis :
+`SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (laisse `NEXT_PUBLIC_EXTENSION_ID` vide
+pour l'instant), puis :
 ```bash
 npm run dev:web
 ```

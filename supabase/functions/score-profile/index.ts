@@ -1,37 +1,45 @@
 // POST { persona_id, profile } → { prospect_id, score, reason }
 // AI match score between a visited profile and the active Buyer Persona.
+import { z } from "zod";
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { HttpError, loadPersonaContext, userClient } from "../_shared/supabase.ts";
-import { complete } from "../_shared/claude.ts";
+import { errorResponse, HttpError } from "../_shared/errors.ts";
+import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClient } from "../_shared/supabase.ts";
+import { complete, sanitizeAiText } from "../_shared/claude.ts";
 import { SCORE_SYSTEM, scorePrompt } from "../_shared/prompts.ts";
-import { parseProfile, upsertProspect } from "../_shared/profile.ts";
+import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
+
+const BodySchema = z.object({ persona_id: z.string().uuid(), profile: ProfileSchema });
+const ScoreSchema = z.object({ score: z.coerce.number(), reason: z.string().optional() });
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return errorResponse(new HttpError(405, "method_not_allowed"), "score-profile");
   try {
+    await limitByIp(req, "ai", 60, 60);
     const { supabase, userId } = await userClient(req);
-    const body = await req.json();
-    if (typeof body.persona_id !== "string") throw new HttpError(400, "persona_id_required");
-    const profile = parseProfile(body.profile);
+    const body = await parseBody(req, BodySchema);
     const ctx = await loadPersonaContext(supabase, userId, body.persona_id);
 
-    const raw = await complete(SCORE_SYSTEM, scorePrompt(ctx, profile), 1000);
-    const match = raw.match(/\{[\s\S]*\}/);
+    const usageId = await consumeAiQuota(supabase, "score");
+    const out = await complete(SCORE_SYSTEM, scorePrompt(ctx, body.profile), 1000);
+    await recordAiUsage(supabase, usageId, out.usage);
+
     let score = 50;
     let reason = "";
+    const match = out.text.match(/\{[\s\S]*\}/);
     if (match) {
       try {
-        const parsed = JSON.parse(match[0]);
-        score = Math.max(0, Math.min(100, Math.round(Number(parsed.score) || 0)));
-        reason = String(parsed.reason ?? "").slice(0, 300);
+        const parsed = ScoreSchema.safeParse(JSON.parse(match[0]));
+        if (parsed.success) {
+          score = Math.max(0, Math.min(100, Math.round(parsed.data.score)));
+          reason = sanitizeAiText(parsed.data.reason ?? "").slice(0, 300);
+        }
       } catch { /* keep neutral score */ }
     }
 
-    const prospectId = await upsertProspect(supabase, userId, body.persona_id, profile, { score, score_reason: reason });
+    const prospectId = await upsertProspect(supabase, userId, body.persona_id, body.profile, { score, score_reason: reason });
     return json({ prospect_id: prospectId, score, reason });
   } catch (e) {
-    const status = e instanceof HttpError ? e.status : 500;
-    console.error(e);
-    return json({ error: e instanceof Error ? e.message : "unknown_error" }, status);
+    return errorResponse(e, "score-profile");
   }
 });

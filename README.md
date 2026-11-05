@@ -100,12 +100,17 @@ npm run build:ext
 3. Ajouter le domaine de production de la web app dans `externally_connectable.matches` du `manifest.json`.
 4. Ouvrir LinkedIn, cliquer sur l'icône de l'extension → **Se connecter** → la page `/extension/connect` relie la session.
 
+## Sécurité
+
+Règles appliquées (secrets, RLS, appartenance, limites, validation) : [`docs/SECURITE.md`](docs/SECURITE.md).
+
 ## Tests
 
 ```bash
 npm test -w @kairo/shared          # builder d'URL, validation des notes
 npm run test:dom -w @kairo/extension   # scraping + flux d'invitation sur une page fixture (Playwright)
 npm run typecheck --workspaces
+supabase/tests/run_local.sh            # isolation RLS entre utilisateurs (PostgreSQL local)
 deno check supabase/functions/*/index.ts
 ```
 

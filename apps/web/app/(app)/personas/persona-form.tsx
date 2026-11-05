@@ -102,7 +102,11 @@ export function PersonaForm({ values, locale }: { values: PersonaFormValues; loc
 
       {state.error && (
         <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300">
-          {state.error === "persona_limit_reached" ? t("personas.limit") : state.error}
+          {state.error === "persona_limit_reached"
+            ? t("personas.limit")
+            : state.error === "invalid_request"
+              ? `${t("common.invalid")}${state.fields?.length ? ` (${state.fields.join(", ")})` : ""}`
+              : t("common.error")}
         </p>
       )}
       <div className="flex gap-3">

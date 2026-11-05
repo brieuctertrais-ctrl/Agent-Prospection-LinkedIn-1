@@ -1,47 +1,57 @@
 // POST { persona_id, profile, previous_text? }
 // Records the "approve" decision, generates the invitation note with Claude,
 // stores the message version and upserts the Lead.
+import { z } from "zod";
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { HttpError, loadPersonaContext, userClient } from "../_shared/supabase.ts";
-import { complete } from "../_shared/claude.ts";
+import { errorResponse, HttpError } from "../_shared/errors.ts";
+import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClient } from "../_shared/supabase.ts";
+import { complete, sanitizeAiText } from "../_shared/claude.ts";
 import { INVITATION_SYSTEM, invitationPrompt } from "../_shared/prompts.ts";
-import { parseProfile, upsertProspect } from "../_shared/profile.ts";
+import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
 
 const MAX_CHARS = 300;
 const MAX_ATTEMPTS = 3;
 
-function cleanup(text: string): string {
-  return text.trim().replace(/^["«“]\s*|\s*["»”]$/g, "").trim();
-}
+const BodySchema = z.object({
+  persona_id: z.string().uuid(),
+  profile: ProfileSchema,
+  previous_text: z.string().max(600).optional(),
+});
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return errorResponse(new HttpError(405, "method_not_allowed"), "generate-message");
   try {
+    await limitByIp(req, "ai", 60, 60);
     const { supabase, userId } = await userClient(req);
-    const body = await req.json();
-    if (typeof body.persona_id !== "string") throw new HttpError(400, "persona_id_required");
-    const profile = parseProfile(body.profile);
-    const previous = typeof body.previous_text === "string" ? body.previous_text.slice(0, 600) : undefined;
+    const body = await parseBody(req, BodySchema);
+    const { profile } = body;
 
+    // Ownership: the persona is read through RLS and filtered on the token's user id.
     const ctx = await loadPersonaContext(supabase, userId, body.persona_id);
     const prospectId = await upsertProspect(supabase, userId, body.persona_id, profile);
 
-    await supabase.from("decisions").upsert(
+    const { error: decErr } = await supabase.from("decisions").upsert(
       { user_id: userId, prospect_id: prospectId, persona_id: body.persona_id, decision: "approve" },
       { onConflict: "user_id,prospect_id" },
     );
+    if (decErr) throw new Error(`decision_failed: ${decErr.code}`);
 
     // Generate; if over the LinkedIn limit, ask the model to shorten. Never return > 300 chars.
+    // Each model call consumes one unit of the user's AI quota.
     let text = "";
     let feedback: string | undefined;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      text = cleanup(await complete(INVITATION_SYSTEM, invitationPrompt(ctx, profile, previous, feedback)));
+      const usageId = await consumeAiQuota(supabase, "generate");
+      const out = await complete(INVITATION_SYSTEM, invitationPrompt(ctx, profile, body.previous_text, feedback));
+      await recordAiUsage(supabase, usageId, out.usage);
+      text = sanitizeAiText(out.text);
       const chars = [...text].length;
       if (chars > 0 && chars <= MAX_CHARS) break;
       feedback = `Ton message fait ${chars} caractères : réécris-le en 260 caractères maximum, en gardant l'élément personnalisé et la question finale.`;
       text = "";
     }
-    if (!text) throw new HttpError(422, "message_too_long");
+    if (!text) throw new HttpError(422, "generation_failed");
 
     const { data: last } = await supabase
       .from("messages")
@@ -66,7 +76,7 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (msgErr) throw new HttpError(500, msgErr.message);
+    if (msgErr) throw new Error(`message_insert_failed: ${msgErr.code}`);
 
     const { data: lead, error: leadErr } = await supabase
       .from("leads")
@@ -82,19 +92,10 @@ Deno.serve(async (req) => {
       )
       .select("id")
       .single();
-    if (leadErr) throw new HttpError(500, leadErr.message);
+    if (leadErr) throw new Error(`lead_upsert_failed: ${leadErr.code}`);
 
-    return json({
-      prospect_id: prospectId,
-      lead_id: lead.id,
-      message_id: message.id,
-      text,
-      chars: [...text].length,
-      version,
-    });
+    return json({ prospect_id: prospectId, lead_id: lead.id, message_id: message.id, text, chars: [...text].length, version });
   } catch (e) {
-    const status = e instanceof HttpError ? e.status : 500;
-    console.error(e);
-    return json({ error: e instanceof Error ? e.message : "unknown_error" }, status);
+    return errorResponse(e, "generate-message");
   }
 });

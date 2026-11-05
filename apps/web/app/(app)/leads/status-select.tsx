@@ -11,7 +11,12 @@ export function StatusSelect({ id, value, labels }: { id: string; value: LeadSta
       className="h-8 text-xs"
       disabled={pending}
       defaultValue={value}
-      onChange={(e) => start(() => updateLeadStatus(id, e.target.value as LeadStatus))}
+      onChange={(e) => {
+        const next = e.target.value as LeadStatus;
+        start(async () => {
+          await updateLeadStatus(id, next);
+        });
+      }}
     >
       {LEAD_STATUSES.map((s) => (
         <option key={s} value={s}>{labels[s]}</option>

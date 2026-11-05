@@ -2,7 +2,7 @@ import { Download, ExternalLink } from "lucide-react";
 import { LEAD_STATUSES, type LeadStatus } from "@kairo/shared";
 import { requireUser } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n";
-import { fetchLeads } from "@/lib/leads";
+import { fetchLeads, LeadFiltersSchema, safePhotoUrl, safeProfileUrl } from "@/lib/leads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -13,7 +13,7 @@ export default async function LeadsPage({
 }: {
   searchParams: Promise<{ persona?: string; status?: string; q?: string }>;
 }) {
-  const filters = await searchParams;
+  const filters = LeadFiltersSchema.parse(await searchParams);
   const { supabase, user } = await requireUser();
   const { t, locale } = await getT();
   const [leads, { data: personas }, { data: paid }] = await Promise.all([
@@ -25,7 +25,9 @@ export default async function LeadsPage({
   await supabase.from("leads").update({ seen_at: new Date().toISOString() }).eq("user_id", user.id).is("seen_at", null);
 
   const statusLabels = Object.fromEntries(LEAD_STATUSES.map((s) => [s, t(`status.${s}`)])) as Record<LeadStatus, string>;
-  const exportQs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString();
+  const exportQs = new URLSearchParams(
+    Object.entries(filters).filter((e): e is [string, string] => typeof e[1] === "string" && e[1] !== ""),
+  ).toString();
 
   return (
     <div>
@@ -71,28 +73,35 @@ export default async function LeadsPage({
               </tr>
             </thead>
             <tbody>
-              {leads.map((l) => (
+              {leads.map((l) => {
+                const url = safeProfileUrl(l.linkedin_url);
+                const photo = safePhotoUrl(l.photo_url);
+                return (
                 <tr key={l.id} className="border-b border-white/5 align-top last:border-0">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {l.prospect.photo_url ? (
-                        <img src={l.prospect.photo_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                      {photo ? (
+                        <img src={photo} alt="" referrerPolicy="no-referrer" className="h-9 w-9 rounded-full object-cover" />
                       ) : (
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-lighter">
-                          {(l.prospect.full_name ?? "?").slice(0, 1)}
+                          {(l.full_name ?? "?").slice(0, 1)}
                         </span>
                       )}
-                      <a href={l.prospect.linkedin_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium hover:text-gold">
-                        {l.prospect.full_name} <ExternalLink className="h-3 w-3" />
-                      </a>
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium hover:text-gold">
+                          {l.full_name} <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="font-medium">{l.full_name}</span>
+                      )}
                     </div>
                   </td>
-                  <td className="max-w-[220px] px-4 py-3 text-slate-300">{l.prospect.headline}</td>
-                  <td className="px-4 py-3 text-slate-300">{l.prospect.company}</td>
-                  <td className="px-4 py-3 text-slate-300">{l.prospect.location}</td>
-                  <td className="px-4 py-3 text-slate-300">{l.persona?.name}</td>
+                  <td className="max-w-[220px] px-4 py-3 text-slate-300">{l.headline}</td>
+                  <td className="px-4 py-3 text-slate-300">{l.company}</td>
+                  <td className="px-4 py-3 text-slate-300">{l.location}</td>
+                  <td className="px-4 py-3 text-slate-300">{l.persona_name}</td>
                   <td className="max-w-[320px] px-4 py-3">
-                    <p className="line-clamp-3 rounded-lg bg-cream p-2 text-xs text-navy">{l.message?.text}</p>
+                    <p className="line-clamp-3 whitespace-pre-line rounded-lg bg-cream p-2 text-xs text-navy">{l.message_text}</p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-slate-400">
                     {new Date(l.created_at).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
@@ -101,7 +110,8 @@ export default async function LeadsPage({
                     <StatusSelect id={l.id} value={l.status} labels={statusLabels} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

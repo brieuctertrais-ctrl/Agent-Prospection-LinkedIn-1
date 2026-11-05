@@ -1,8 +1,9 @@
-project_id = "kairo-bizdev"
+project_id = "efi-prospection"
 
 [api]
 port = 54321
 schemas = ["public"]
+max_rows = 1000
 
 [db]
 port = 54322
@@ -11,10 +12,34 @@ major_version = 15
 [auth]
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
 
 [auth.email]
 enable_signup = true
-enable_confirmations = false
+# Email ownership must be proven (magic link / confirmation email).
+enable_confirmations = true
+double_confirm_changes = true
+secure_password_change = true
+max_frequency = "60s"
+otp_expiry = 3600
+
+# Built-in Supabase Auth rate limits (per IP unless stated). Mirror these in the
+# hosted project: Dashboard > Authentication > Rate Limits.
+[auth.rate_limit]
+email_sent = 10            # emails per hour (whole project)
+sign_in_sign_ups = 30      # sign-in/sign-up requests per 5 min
+token_verifications = 30   # OTP / magic link verifications per 5 min
+token_refresh = 150        # session refreshes per 5 min
+
+# Captcha on sign-up / sign-in / magic link. The SECRET key is read from the environment
+# (Dashboard > Authentication > Attack Protection on the hosted project), never committed.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "env(TURNSTILE_SECRET_KEY)"
 
 [functions.generate-message]
 verify_jwt = true

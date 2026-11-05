@@ -1,17 +1,23 @@
 import type { GenerateMessageResponse, ScoreProfileResponse, ScrapedProfile } from "@kairo/shared";
 import { supabase } from "./supabase";
 
-async function invoke<T>(fn: string, body: unknown): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>(fn, { body: body as Record<string, unknown> });
+const KNOWN_ERRORS = ["rate_limited", "quota_exceeded", "service_busy", "subscription_required", "unauthorized"];
+
+/** Error with a code that maps to a user-facing message (err.*). Raw details are never shown. */
+export class ApiError extends Error {}
+
+async function invoke<T>(fn: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(fn, { body });
   if (error) {
-    let message = error.message;
+    let code = "generic";
     try {
       const ctx = (error as { context?: Response }).context;
-      if (ctx) message = (await ctx.json()).error ?? message;
+      const server = ctx ? (await ctx.json()).error : undefined;
+      if (typeof server === "string" && KNOWN_ERRORS.includes(server)) code = server;
     } catch {
-      /* keep message */
+      /* keep generic */
     }
-    throw new Error(message);
+    throw new ApiError(code);
   }
   return data as T;
 }

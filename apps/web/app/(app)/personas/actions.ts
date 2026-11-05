@@ -23,11 +23,19 @@ const schema = z.object({
   copy_instructions: z.string().max(2000),
 });
 
-export type SaveState = { error?: string };
+export type SaveState = { error?: string; fields?: string[] };
+
+function logAndFail(where: string, code: string): SaveState {
+  console.error(JSON.stringify({ where, code }));
+  return { error: "save_failed" };
+}
 
 export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveState> {
   const { supabase, user } = await requireUser();
-  const id = fd.get("id") ? String(fd.get("id")) : null;
+  const rawId = fd.get("id");
+  const idParsed = z.string().uuid().nullable().safeParse(rawId ? String(rawId) : null);
+  if (!idParsed.success) return { error: "invalid_request" };
+  const id = idParsed.data;
 
   const parsed = schema.safeParse({
     name: fd.get("name"),
@@ -43,7 +51,7 @@ export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveS
     copy_template: String(fd.get("copy_template") ?? ""),
     copy_instructions: String(fd.get("copy_instructions") ?? ""),
   });
-  if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ") };
+  if (!parsed.success) return { error: "invalid_request", fields: parsed.error.issues.map((i) => String(i.path[0])) };
   const v = parsed.data;
 
   const personaRow = {
@@ -59,11 +67,19 @@ export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveS
 
   let personaId = id;
   if (id) {
-    const { error } = await supabase.from("personas").update(personaRow).eq("id", id);
-    if (error) return { error: error.message };
+    // Ownership check: the persona must belong to the session user (never trust the id from the form).
+    const { data: owned, error } = await supabase
+      .from("personas")
+      .update(personaRow)
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
+    if (error) return logAndFail("persona_update", error.code);
+    if (!owned) return { error: "not_found" };
   } else {
     const { data, error } = await supabase.from("personas").insert(personaRow).select("id").single();
-    if (error) return { error: error.message.includes("persona_limit_reached") ? "persona_limit_reached" : error.message };
+    if (error) return error.message.includes("persona_limit_reached") ? { error: "persona_limit_reached" } : logAndFail("persona_insert", error.code);
     personaId = data.id;
     // First persona becomes the active one in the extension.
     await supabase.from("user_settings").update({ active_persona_id: personaId }).is("active_persona_id", null);
@@ -84,14 +100,16 @@ export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveS
       instructions: v.copy_instructions,
     }),
   ]);
-  if (p.error || c.error) return { error: (p.error ?? c.error)!.message };
+  if (p.error || c.error) return logAndFail("pitch_copy_upsert", (p.error ?? c.error)!.code);
 
   revalidatePath("/personas");
   redirect("/personas");
 }
 
 export async function deletePersona(fd: FormData) {
-  const { supabase } = await requireUser();
-  await supabase.from("personas").delete().eq("id", String(fd.get("id")));
+  const id = z.string().uuid().safeParse(fd.get("id"));
+  if (!id.success) return;
+  const { supabase, user } = await requireUser();
+  await supabase.from("personas").delete().eq("id", id.data).eq("user_id", user.id);
   revalidatePath("/personas");
 }

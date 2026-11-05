@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { getState, patchState } from "../lib/storage";
 import { getLinkedInTab, sendToTab } from "../lib/tabs";
 import { nextProfile, type Settings } from "../lib/engine";
-import { countToday, countWeek, generateMessage, logAction, markInvitationSent, rejectProfile, saveEditedMessage } from "../lib/api";
+import { ApiError, countToday, countWeek, generateMessage, logAction, markInvitationSent, rejectProfile, saveEditedMessage } from "../lib/api";
 import { WEB_APP_URL } from "../lib/config";
 import { Bubble, Conversation, GhostButton, GoldButton, Header, Mascot } from "./components";
 import { MessageCard } from "./MessageCard";
@@ -36,6 +36,9 @@ type Screen =
   | { name: "dailyCap" }
   | { name: "paused"; reason: string }
   | { name: "error"; error: string };
+
+/** Maps any error to a user-facing message key: no raw technical detail is displayed. */
+const errorKey = (e: unknown) => `err.${e instanceof ApiError ? e.message : "generic"}`;
 
 const DEFAULT_SETTINGS: Settings = { daily_profile_views: 80, daily_invitations: 20, weekly_invitations: 100, min_match_score: 60 };
 
@@ -120,7 +123,7 @@ export function App() {
       else if (r.kind === "daily_cap") setScreen({ name: "dailyCap" });
       else setScreen({ name: "paused", reason: r.code });
     } catch (e) {
-      setScreen({ name: "error", error: e instanceof Error ? e.message : String(e) });
+      setScreen({ name: "error", error: errorKey(e) });
     } finally {
       busy.current = false;
     }
@@ -131,7 +134,7 @@ export function App() {
     try {
       await rejectProfile(persona.id, screen.profile, screen.prospectId);
     } catch (e) {
-      return setScreen({ name: "error", error: String(e) });
+      return setScreen({ name: "error", error: errorKey(e) });
     }
     await explore();
   };
@@ -153,7 +156,7 @@ export function App() {
         sendState: "idle",
       });
     } catch (e) {
-      setScreen({ name: "error", error: e instanceof Error ? e.message : String(e) });
+      setScreen({ name: "error", error: errorKey(e) });
     }
   };
 
@@ -165,7 +168,7 @@ export function App() {
       const r = await generateMessage(persona.id, current.profile, current.text);
       setScreen({ ...current, text: r.text, originalText: r.text, messageId: r.message_id, regenerating: false });
     } catch (e) {
-      setScreen({ ...current, regenerating: false, sendError: e instanceof Error ? e.message : String(e) });
+      setScreen({ ...current, regenerating: false, sendError: t(errorKey(e)) });
     }
   };
 
@@ -397,7 +400,7 @@ function ScreenView({
     case "error":
       return (
         <EmptyState>
-          <Bubble>{t("panel.error", { error: screen.error })}</Bubble>
+          <Bubble>{t(screen.error)}</Bubble>
           {next}
         </EmptyState>
       );

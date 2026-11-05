@@ -1,43 +1,42 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { LEAD_STATUSES } from "@kairo/shared";
+import { z } from "zod";
+import { LEAD_STATUSES, type LeadStatus } from "@kairo/shared";
 
-export interface LeadFilters {
-  persona?: string;
-  status?: string;
-  q?: string;
-}
+/** Untrusted query-string filters, validated before use. Invalid values are ignored. */
+export const LeadFiltersSchema = z.object({
+  persona: z.string().uuid().optional().catch(undefined),
+  status: z.enum(LEAD_STATUSES).optional().catch(undefined),
+  q: z.string().trim().max(100).optional().catch(undefined),
+});
+export type LeadFilters = z.infer<typeof LeadFiltersSchema>;
 
 export interface LeadRow {
   id: string;
-  status: (typeof LEAD_STATUSES)[number];
+  status: LeadStatus;
   created_at: string;
-  persona: { name: string } | null;
-  message: { text: string } | null;
-  prospect: {
-    full_name: string | null;
-    headline: string | null;
-    company: string | null;
-    location: string | null;
-    linkedin_url: string;
-    photo_url: string | null;
-  };
+  persona_name: string | null;
+  message_text: string | null;
+  full_name: string | null;
+  headline: string | null;
+  company: string | null;
+  location: string | null;
+  linkedin_url: string;
+  photo_url: string | null;
 }
 
+/** Parameterised search (SQL function search_leads, RLS applies: only the caller's leads). */
 export async function fetchLeads(supabase: SupabaseClient, f: LeadFilters, limit = 500): Promise<LeadRow[]> {
-  let query = supabase
-    .from("leads")
-    .select(
-      "id, status, created_at, persona:personas(name), message:messages(text), prospect:prospects!inner(full_name, headline, company, location, linkedin_url, photo_url)",
-    )
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (f.persona) query = query.eq("persona_id", f.persona);
-  if (f.status && (LEAD_STATUSES as readonly string[]).includes(f.status)) query = query.eq("status", f.status);
-  if (f.q) {
-    const q = f.q.replace(/[%,()]/g, " ").trim();
-    if (q) query = query.or(`full_name.ilike.%${q}%,company.ilike.%${q}%,headline.ilike.%${q}%`, { referencedTable: "prospects" });
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as unknown as LeadRow[];
+  const { data, error } = await supabase.rpc("search_leads", {
+    p_q: f.q || null,
+    p_persona: f.persona ?? null,
+    p_status: f.status ?? null,
+    p_limit: limit,
+  });
+  if (error) throw new Error(`search_leads_failed: ${error.code}`);
+  return (data ?? []) as LeadRow[];
 }
+
+/** Only LinkedIn profile URLs / LinkedIn CDN images are ever rendered as links or images. */
+export const safeProfileUrl = (u: string | null) =>
+  u && /^https:\/\/www\.linkedin\.com\/in\/[^/?#\s]+\/$/.test(u) ? u : null;
+export const safePhotoUrl = (u: string | null) => (u && /^https:\/\/[a-z0-9.-]+\.licdn\.com\//.test(u) ? u : null);
