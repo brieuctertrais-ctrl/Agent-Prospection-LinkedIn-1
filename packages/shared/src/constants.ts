@@ -34,6 +34,19 @@ export const INDUSTRIES: { label: string; id?: string }[] = [
   { label: "Manufacturing", id: "25" },
   { label: "Retail", id: "27" },
   { label: "Education", id: "1999" },
+  // Energy-intensive sectors (no LinkedIn id: used by the AI score only, not as a search filter)
+  { label: "Industrie / production" },
+  { label: "Agroalimentaire" },
+  { label: "Hôtellerie" },
+  { label: "Restauration" },
+  { label: "Commerce multisite / grande distribution" },
+  { label: "Logistique / entrepôts / froid" },
+  { label: "Santé / cliniques / EHPAD" },
+  { label: "Immobilier tertiaire / bureaux" },
+  { label: "Collectivités / établissements publics" },
+  { label: "Agriculture / serres" },
+  { label: "Blanchisserie / pressing industriel" },
+  { label: "Boulangerie / métiers de bouche" },
 ];
 
 /** LinkedIn geo URNs for common locations. Unknown locations fall back to a keyword. */

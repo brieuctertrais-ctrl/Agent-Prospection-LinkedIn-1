@@ -71,8 +71,8 @@ export function invitationPrompt(ctx: PersonaContext, profile: ProfileInput, pre
 export const SCORE_SYSTEM = `Tu évalues si un profil LinkedIn est un bon prospect pour un Buyer Persona B2B. Le score sert à présélectionner des profils qu'un commercial relira ensuite : sois juste, pas sévère.
 
 Barème (le poste compte le plus) :
-- Poste / fonction (50 pts) : correspond à l'un des intitulés du persona ou à un équivalent (synonyme, autre langue, niveau proche : « DAF » = « Directeur administratif et financier » = « CFO » ; « Responsable » ≈ « Directeur » dans une PME) → 40 à 50. Fonction voisine avec un pouvoir de décision sur le sujet de l'offre → 25 à 39. Sans rapport → 0 à 15.
-- Pertinence de l'offre pour son entreprise (20 pts) : l'entreprise a-t-elle plausiblement le besoin décrit par l'offre ?
+- Poste / fonction (50 pts) — c'est le pouvoir de décision sur le sujet de l'offre qui compte : correspond à l'un des intitulés du persona ou à un équivalent (synonyme, autre langue, niveau proche : « DAF » = « Directeur administratif et financier » = « CFO » ; « Responsable » ≈ « Directeur » dans une PME) → 40 à 50. Fonction voisine avec un pouvoir de décision sur le sujet de l'offre → 25 à 39. Sans rapport → 0 à 15.
+- Pertinence de l'offre pour son entreprise (20 pts) : l'entreprise a-t-elle plausiblement le besoin décrit par l'offre (activité, nombre de sites, taille, secteur cités dans l'offre) ?
 - Localisation (10 pts) : dans la zone du persona → 10.
 - Secteur et taille d'entreprise (10 pts) : correspondants → 10.
 - Mots-clés du persona présents sur le profil (10 pts).
@@ -86,7 +86,7 @@ export function scorePrompt(ctx: PersonaContext, profile: ProfileInput): string 
   const p = ctx.persona;
   return [
     `## Buyer Persona\nPostes : ${p.job_titles.join(", ")}\nLocalisations : ${p.locations.join(", ")}\nSecteurs : ${p.industries.join(", ")}\nTailles : ${p.company_sizes.join(", ")}\nMots-clés : ${p.keywords.join(", ")}`,
-    `## Offre\n${ctx.pitch?.title ?? ""} — ${clip(ctx.pitch?.description, 500)}`,
+    `## Offre (la cible idéale y est souvent décrite)\n${ctx.pitch?.title ?? ""} — ${clip(ctx.pitch?.description, 1500)}\nBénéfices : ${clip(ctx.pitch?.benefits, 600)}`,
     `## Profil\n${formatProfile(profile)}`,
   ].join("\n\n");
 }
