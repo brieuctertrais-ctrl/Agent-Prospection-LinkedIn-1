@@ -43,6 +43,10 @@ secret = "env(TURNSTILE_SECRET_KEY)"
 
 [functions.generate-message]
 verify_jwt = true
+entrypoint = "./functions/generate-message/index.ts"
+import_map = "./functions/generate-message/deno.json"
 
 [functions.score-profile]
 verify_jwt = true
+entrypoint = "./functions/score-profile/index.ts"
+import_map = "./functions/score-profile/deno.json"
