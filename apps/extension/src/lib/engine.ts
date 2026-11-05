@@ -29,14 +29,23 @@ async function pause(code: string, detail?: string): Promise<NextResult> {
   return { kind: "paused", code };
 }
 
-/** Fills the candidate queue from the next LinkedIn search results page. */
+const MAX_SEARCH_PAGE = 100; // LinkedIn stops returning people-search results after ~100 pages
+const PAGES_PER_REFILL = 5;
+const QUEUE_VERSION = 2;
+
+/** Fills the candidate queue from the next LinkedIn search results pages. */
 async function refillQueue(tabId: number, persona: Persona): Promise<NextResult | null> {
   const state = await getState();
   const q = state.queues[persona.id];
-  const queue = q && q.day === today() ? q : { page: q?.page ?? 1, urls: [], exhausted: false, day: today() };
+  const fresh = !q || q.day !== today() || q.v !== QUEUE_VERSION;
+  const queue = fresh ? { page: q?.page ?? 1, urls: [] as string[], exhausted: false, day: today(), v: QUEUE_VERSION } : q;
   if (queue.urls.length || queue.exhausted) return null;
 
-  for (let attempts = 0; attempts < 3 && !queue.urls.length; attempts++) {
+  for (let n = 0; n < PAGES_PER_REFILL && !queue.urls.length; n++) {
+    if (queue.page > MAX_SEARCH_PAGE) {
+      queue.exhausted = true;
+      break;
+    }
     await navigate(tabId, buildPeopleSearchUrl(persona, queue.page));
     await sleep(1500 + Math.random() * 1500);
     const res = await sendToTab(tabId, { type: "SCRAPE_SEARCH_RESULTS" });
@@ -44,16 +53,26 @@ async function refillQueue(tabId: number, persona: Persona): Promise<NextResult 
     if (res.type !== "SEARCH_RESULTS") break;
     await logAction("search_page", "success", { page: queue.page, found: res.urls.length });
 
-    const { data } = await supabase.rpc("filter_new_profiles", { urls: res.urls });
-    queue.urls.push(...((data as string[] | null) ?? []));
-    queue.page += 1;
-    if (!res.hasNextPage || res.urls.length === 0) {
+    // Only a page with no profile at all means the end of the results
+    // (the "Next" button is not reliable on the current LinkedIn layout).
+    if (res.urls.length === 0) {
       queue.exhausted = true;
       break;
     }
+    const { data } = await supabase.rpc("filter_new_profiles", { urls: res.urls });
+    queue.urls.push(...((data as string[] | null) ?? []));
+    queue.page += 1;
   }
   await patchState({ queues: { ...state.queues, [persona.id]: queue } });
   return null;
+}
+
+/** Lets the user search again after "no more profiles" (keeps the page position). */
+export async function resetQueue(personaId: string): Promise<void> {
+  const state = await getState();
+  const q = state.queues[personaId];
+  if (!q) return;
+  await patchState({ queues: { ...state.queues, [personaId]: { ...q, exhausted: false, urls: [], v: QUEUE_VERSION } } });
 }
 
 async function popUrl(personaId: string): Promise<string | undefined> {

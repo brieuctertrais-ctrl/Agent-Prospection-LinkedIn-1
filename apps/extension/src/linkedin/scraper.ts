@@ -92,7 +92,14 @@ export function scrapeProfile(): ScrapedProfile | null {
 export function scrapeSearchResults(): { urls: string[]; hasNextPage: boolean } {
   const self = normalizeProfileUrl(document.querySelector<HTMLAnchorElement>("a[href*='/in/'].global-nav__primary-link")?.href ?? "");
   const urls = new Set<string>();
-  for (const a of queryAll<HTMLAnchorElement>("searchResultLinks")) {
+  let anchors = queryAll<HTMLAnchorElement>("searchResultLinks");
+  if (!anchors.length) {
+    // Layout without <main>: any profile link outside navigation / side panels.
+    anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']")).filter(
+      (a) => !a.closest("nav, header, aside, footer, [role='navigation'], [role='banner']"),
+    );
+  }
+  for (const a of anchors) {
     const u = normalizeProfileUrl(a.href);
     // Skip anonymised "LinkedIn Member" results (ACoAA… ids) and self.
     if (u && u !== self && !/\/in\/acoa/i.test(u)) urls.add(u);

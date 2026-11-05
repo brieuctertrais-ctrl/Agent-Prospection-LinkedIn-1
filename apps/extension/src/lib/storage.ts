@@ -4,7 +4,7 @@ export interface LocalState {
   activePersonaId?: string;
   mode: Mode;
   /** Per persona: next LinkedIn search page to read and queued candidate URLs. */
-  queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string }>;
+  queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string; v?: number }>;
   pausedReason?: string;
 }
 

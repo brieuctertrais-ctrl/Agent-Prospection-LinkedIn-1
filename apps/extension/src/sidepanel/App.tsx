@@ -4,7 +4,7 @@ import { translate, type Locale, type MessageKey, type Mode, type Persona, type 
 import { supabase } from "../lib/supabase";
 import { getState, patchState } from "../lib/storage";
 import { getLinkedInTab, sendToTab } from "../lib/tabs";
-import { nextProfile, type Settings } from "../lib/engine";
+import { nextProfile, resetQueue, type Settings } from "../lib/engine";
 import { ApiError, countToday, countWeek, generateMessage, logAction, markInvitationSent, rejectProfile, saveEditedMessage } from "../lib/api";
 import { WEB_APP_URL } from "../lib/config";
 import { Bubble, Conversation, GhostButton, GoldButton, Header, Mascot } from "./components";
@@ -241,6 +241,10 @@ export function App() {
             onSend={send}
             onEdit={(text) => screen.name === "message" && setScreen({ ...screen, text })}
             onResume={resume}
+            onSearchAgain={async () => {
+              if (persona) await resetQueue(persona.id);
+              await explore();
+            }}
             onRetry={bootstrap}
           />
         )}
@@ -261,6 +265,7 @@ function ScreenView({
   onEdit,
   onResume,
   onRetry,
+  onSearchAgain,
 }: {
   screen: Screen;
   t: (k: string, v?: Record<string, string | number>) => string;
@@ -273,6 +278,7 @@ function ScreenView({
   onEdit: (t: string) => void;
   onResume: () => void;
   onRetry: () => void;
+  onSearchAgain: () => void;
 }) {
   const next = (
     <GoldButton className="w-full" onClick={onExplore}>
@@ -384,7 +390,12 @@ function ScreenView({
       );
 
     case "empty":
-      return <EmptyState><Bubble>{t("panel.noMore")}</Bubble></EmptyState>;
+      return (
+        <EmptyState>
+          <Bubble>{t("panel.noMore")}</Bubble>
+          <GoldButton className="w-full" onClick={onSearchAgain}>{t("panel.searchAgain")}</GoldButton>
+        </EmptyState>
+      );
 
     case "dailyCap":
       return <EmptyState><Bubble>{t("panel.dailyCap")}</Bubble></EmptyState>;
