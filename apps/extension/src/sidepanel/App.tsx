@@ -276,6 +276,7 @@ export function App() {
           />
         )}
       </main>
+      <footer className="px-4 pb-3 text-center text-[10px] text-slate-500">version {__BUILD_STAMP__} UTC</footer>
     </div>
   );
 }
