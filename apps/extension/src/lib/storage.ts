@@ -4,7 +4,7 @@ export interface LocalState {
   activePersonaId?: string;
   mode: Mode;
   /** Per persona: next LinkedIn search page to read and queued candidate URLs. */
-  queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string; v?: number }>;
+  queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string; v?: number; sig?: string }>;
   pausedReason?: string;
   /** Note length limit detected on the user's LinkedIn account (200 free, 300 Premium). */
   noteMaxChars?: number;

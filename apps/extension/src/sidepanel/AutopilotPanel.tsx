@@ -4,6 +4,7 @@ import type { Persona } from "@kairo/shared";
 import { batchCounts, prepareBatch, sendApproved, type PrepareEnd, type SendEnd } from "../lib/autopilot";
 import type { Settings } from "../lib/engine";
 import { getLinkedInTab } from "../lib/tabs";
+import { fetchPersona } from "../lib/api";
 import { patchState } from "../lib/storage";
 import { supabase } from "../lib/supabase";
 import { WEB_APP_URL } from "../lib/config";
@@ -84,7 +85,7 @@ export function AutopilotPanel({
       setStatus(t("ap.preparing", { n: 0, size }));
       const r = await prepareBatch({
         tabId,
-        persona,
+        persona: (await fetchPersona(persona.id)) ?? persona,
         settings,
         size,
         noteMax,

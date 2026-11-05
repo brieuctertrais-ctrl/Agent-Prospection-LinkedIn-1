@@ -1,4 +1,4 @@
-import type { GenerateMessageResponse, ScoreProfileResponse, ScrapedProfile } from "@kairo/shared";
+import type { GenerateMessageResponse, Persona, ScoreProfileResponse, ScrapedProfile } from "@kairo/shared";
 import { supabase } from "./supabase";
 
 const KNOWN_ERRORS = ["rate_limited", "quota_exceeded", "service_busy", "subscription_required", "unauthorized"];
@@ -94,4 +94,10 @@ export async function saveEditedMessage(messageId: string, text: string) {
 export async function markInvitationSent(leadId: string, prospectId: string, linkedinUrl: string) {
   await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("id", leadId);
   await logAction("invitation", "success", {}, { prospect_id: prospectId, linkedin_url: linkedinUrl });
+}
+
+/** Fresh copy of a persona (it may have been edited in the dashboard since the panel opened). */
+export async function fetchPersona(id: string): Promise<Persona | null> {
+  const { data } = await supabase.from("personas").select("*").eq("id", id).maybeSingle();
+  return (data as Persona | null) ?? null;
 }

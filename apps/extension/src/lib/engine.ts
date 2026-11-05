@@ -52,8 +52,13 @@ const QUEUE_VERSION = 2;
 async function refillQueue(tabId: number, persona: Persona): Promise<NextResult | null> {
   const state = await getState();
   const q = state.queues[persona.id];
-  const fresh = !q || q.day !== today() || q.v !== QUEUE_VERSION;
-  const queue = fresh ? { page: q?.page ?? 1, urls: [] as string[], exhausted: false, day: today(), v: QUEUE_VERSION } : q;
+  // Persona criteria changed → the LinkedIn search changed: restart from page 1.
+  const sig = buildPeopleSearchUrl(persona, 1);
+  const criteriaChanged = Boolean(q && q.sig !== sig);
+  const fresh = !q || q.day !== today() || q.v !== QUEUE_VERSION || criteriaChanged;
+  const queue = fresh
+    ? { page: criteriaChanged ? 1 : (q?.page ?? 1), urls: [] as string[], exhausted: false, day: today(), v: QUEUE_VERSION, sig }
+    : q;
   if (queue.urls.length || queue.exhausted) return null;
 
   for (let n = 0; n < PAGES_PER_REFILL && !queue.urls.length; n++) {
