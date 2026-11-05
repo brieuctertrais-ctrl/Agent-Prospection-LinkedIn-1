@@ -15,6 +15,7 @@
     "test": "npm run test --workspaces --if-present"
   },
   "overrides": {
-    "@supabase/supabase-js": "2.118.0"
+    "@supabase/supabase-js": "2.118.0",
+    "postcss": "8.5.31"
   }
 }

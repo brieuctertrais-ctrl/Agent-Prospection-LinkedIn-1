@@ -21,7 +21,7 @@ export const ProfileSchema = z.object({
     .default([]),
   recent_activity: z.array(text(500)).max(5).default([]),
   connection_state: z.enum(["none", "pending", "connected", "unknown"]).optional(),
-});
+}).transform((p) => ({ ...p, first_name: p.first_name || p.full_name.split(" ")[0] || "" }));
 export type Profile = z.infer<typeof ProfileSchema>;
 
 export async function parseBody<T extends z.ZodTypeAny>(req: Request, schema: T): Promise<z.infer<T>> {
@@ -36,9 +36,7 @@ export async function parseBody<T extends z.ZodTypeAny>(req: Request, schema: T)
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new HttpError(400, "invalid_request");
-  const data = parsed.data;
-  if (data?.profile && !data.profile.first_name) data.profile.first_name = data.profile.full_name.split(" ")[0] ?? "";
-  return data;
+  return parsed.data;
 }
 
 /** Insert or refresh the prospect row (owned by the token's user); returns its id. */
