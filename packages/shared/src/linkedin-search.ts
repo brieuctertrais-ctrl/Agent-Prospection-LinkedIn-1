@@ -8,12 +8,20 @@ export interface SearchablePersona {
 
 const quote = (s: string) => (/\s/.test(s.trim()) ? `"${s.trim()}"` : s.trim());
 
+export interface SearchOptions {
+  /** Search one job title at a time with LinkedIn's "Title" filter (titleFreeText). */
+  titleIndex?: number;
+  /** Apply the industry filter (default true). Dropped as a fallback when it returns nothing. */
+  withIndustries?: boolean;
+}
+
 /**
  * Builds a LinkedIn people-search URL from a Buyer Persona.
- * Company size and keywords are not available as free-search facets: they are
- * used afterwards by the AI match score.
+ * - With `titleIndex`: one job title per search, via the Title filter (precise, never "no result"
+ *   because of a too long boolean query). Without it: all titles OR-ed in the keywords.
+ * - Company size and keywords are not search facets: they are used by the AI match score.
  */
-export function buildPeopleSearchUrl(persona: SearchablePersona, page = 1): string {
+export function buildPeopleSearchUrl(persona: SearchablePersona, page = 1, opts: SearchOptions = {}): string {
   const params = new URLSearchParams();
   const titles = persona.job_titles.filter(Boolean);
   const geo: string[] = [];
@@ -29,13 +37,18 @@ export function buildPeopleSearchUrl(persona: SearchablePersona, page = 1): stri
     .map((label) => INDUSTRIES.find((i) => i.label === label)?.id)
     .filter((id): id is string => Boolean(id));
 
-  let keywords = titles.length ? titles.map(quote).join(" OR ") : "";
-  if (titles.length > 1) keywords = `(${keywords})`;
+  let keywords = "";
+  if (opts.titleIndex !== undefined && titles.length) {
+    params.set("titleFreeText", titles[opts.titleIndex % titles.length].trim());
+  } else if (titles.length) {
+    keywords = titles.map(quote).join(" OR ");
+    if (titles.length > 1) keywords = `(${keywords})`;
+  }
   if (extraKeywords.length) keywords = [keywords, ...extraKeywords].filter(Boolean).join(" ");
 
   if (keywords) params.set("keywords", keywords);
   if (geo.length) params.set("geoUrn", JSON.stringify(geo));
-  if (industryIds.length) params.set("industry", JSON.stringify(industryIds));
+  if (industryIds.length && opts.withIndustries !== false) params.set("industry", JSON.stringify(industryIds));
   params.set("origin", "FACETED_SEARCH");
   if (page > 1) params.set("page", String(page));
 

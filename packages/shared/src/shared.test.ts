@@ -16,6 +16,18 @@ test("buildPeopleSearchUrl maps titles, geo and industries", () => {
   assert.equal(url.searchParams.get("page"), "2");
 });
 
+test("buildPeopleSearchUrl one title at a time, industries optional", () => {
+  const persona = { job_titles: ["DAF", "Responsable énergie"], locations: ["France"], industries: ["Software Development"] };
+  const u1 = new URL(buildPeopleSearchUrl(persona, 1, { titleIndex: 1 }));
+  assert.equal(u1.searchParams.get("titleFreeText"), "Responsable énergie");
+  assert.equal(u1.searchParams.get("keywords"), null);
+  assert.equal(u1.searchParams.get("industry"), '["4"]');
+  const u2 = new URL(buildPeopleSearchUrl(persona, 3, { titleIndex: 0, withIndustries: false }));
+  assert.equal(u2.searchParams.get("titleFreeText"), "DAF");
+  assert.equal(u2.searchParams.get("industry"), null);
+  assert.equal(u2.searchParams.get("page"), "3");
+});
+
 test("normalizeProfileUrl", () => {
   assert.equal(
     normalizeProfileUrl("https://www.linkedin.com/in/Jean-Dupont-123/?miniProfileUrn=x"),

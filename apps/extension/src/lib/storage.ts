@@ -4,7 +4,22 @@ export interface LocalState {
   activePersonaId?: string;
   mode: Mode;
   /** Per persona: next LinkedIn search page to read and queued candidate URLs. */
-  queues: Record<string, { page: number; urls: string[]; exhausted: boolean; day: string; v?: number; sig?: string }>;
+  queues: Record<
+    string,
+    {
+      page: number;
+      urls: string[];
+      exhausted: boolean;
+      day: string;
+      v?: number;
+      sig?: string;
+      /** Index of the job title being searched (one title per search). */
+      titleIndex?: number;
+      /** Industry filter dropped for the current title (it returned nothing). */
+      relaxed?: boolean;
+      withIndustries?: boolean;
+    }
+  >;
   pausedReason?: string;
   /** Note length limit detected on the user's LinkedIn account (200 free, 300 Premium). */
   noteMaxChars?: number;
