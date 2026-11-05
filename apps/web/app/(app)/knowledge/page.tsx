@@ -3,10 +3,8 @@ import { requireUser } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { addDoc, deleteDoc } from "./actions";
+import { deleteDoc } from "./actions";
+import { KnowledgeForm } from "./knowledge-form";
 
 export default async function KnowledgePage() {
   const { supabase } = await requireUser();
@@ -20,17 +18,21 @@ export default async function KnowledgePage() {
         <p className="text-slate-400">{t("knowledge.subtitle")}</p>
       </div>
       <Card>
-        <form action={addDoc} className="space-y-4">
-          <div>
-            <Label htmlFor="title">{t("knowledge.docTitle")}</Label>
-            <Input id="title" name="title" required />
-          </div>
-          <div>
-            <Label htmlFor="content">{t("knowledge.docContent")}</Label>
-            <Textarea id="content" name="content" required className="min-h-[160px]" />
-          </div>
-          <Button type="submit">{t("common.save")}</Button>
-        </form>
+        <KnowledgeForm
+          labels={{
+            title: t("knowledge.docTitle"),
+            content: t("knowledge.docContent"),
+            save: t("common.save"),
+            import: t("knowledge.import"),
+            importHelp: t("knowledge.importHelp"),
+            reading: t("knowledge.reading"),
+            truncated: t("knowledge.truncated"),
+            tooLarge: t("knowledge.tooLarge"),
+            unsupported: t("knowledge.unsupported"),
+            noText: t("knowledge.noText"),
+            error: t("common.error"),
+          }}
+        />
       </Card>
       {(docs ?? []).map((d) => (
         <Card key={d.id} className="p-5">

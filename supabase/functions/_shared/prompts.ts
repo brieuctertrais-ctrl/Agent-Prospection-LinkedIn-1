@@ -25,9 +25,9 @@ export function formatProfile(p: ProfileInput): string {
 
 function formatOffer(ctx: PersonaContext): string {
   const knowledge = ctx.knowledge
-    .map((k) => `### ${k.title}\n${clip(k.content, 2000)}`)
+    .map((k) => `### ${k.title}\n${clip(k.content, 3000)}`)
     .join("\n\n")
-    .slice(0, 6000);
+    .slice(0, 9000);
   return [
     `Offre : ${ctx.pitch?.title || "(non renseignée)"}`,
     `Description : ${ctx.pitch?.description || "(non renseignée)"}`,

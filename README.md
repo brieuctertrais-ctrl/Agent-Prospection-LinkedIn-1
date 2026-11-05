@@ -53,7 +53,7 @@ supabase/          Migration SQL (tables + RLS + fonctions), Edge Functions IA (
 | Quotas invitations/jour et /semaine, pause auto sur avertissement LinkedIn / vérification de sécurité | ✅ |
 | Leads : tableau, filtres persona/statut, recherche, statut éditable, badge « New » | ✅ |
 | Export CSV (Excel, réservé aux offres payantes) | ✅ |
-| Knowledge (documents utilisés en contexte par l'IA) | ✅ (texte) |
+| Knowledge (documents utilisés en contexte par l'IA) | ✅ (texte, import PDF/TXT/MD lu dans le navigateur) |
 | Paramètres : langue FR/EN, quotas, plages horaires, suppression des données | ✅ |
 | RGPD : purge des prospects rejetés après N mois (`purge_rejected_prospects`), liste d'exclusion | ✅ |
 | Essai 7 jours sans CB (créé automatiquement à l'inscription) | ✅ (Stripe à brancher) |
