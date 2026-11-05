@@ -1,8 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cancelQueueItem, reviewBatch, updateQueuedMessage } from "./actions";
+import { cancelQueueItem, regenerateMessages, reviewBatch, updateQueuedMessage } from "./actions";
 
 export interface QueueItem {
   id: string;
@@ -19,7 +19,7 @@ export interface QueueItem {
   score: number | null;
 }
 
-type Labels = Record<"selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error", string>;
+type Labels = Record<"selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota", string>;
 
 export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: "review" | "approved" | "readonly"; labels: Labels }) {
   const [selected, setSelected] = useState<string[]>(mode === "review" ? items.map((i) => i.id) : []);
@@ -30,7 +30,7 @@ export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: 
   const run = (fn: () => Promise<{ error?: string }>) =>
     start(async () => {
       const r = await fn();
-      setError(r.error ? labels.error : undefined);
+      setError(r.error ? (r.error === labels.quota ? labels.quota : labels.error) : undefined);
       if (!r.error) setSelected([]);
     });
 
@@ -52,6 +52,19 @@ export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: 
           </Button>
           <Button variant="outline" disabled={pending || selected.length === 0} onClick={() => run(() => reviewBatch([], selected))}>
             {labels.reject}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={pending || selected.length === 0 || selected.length > 20}
+            onClick={() =>
+              run(async () => {
+                const r = await regenerateMessages(selected);
+                return r.error === "quota" ? { error: labels.quota } : r.error ? { error: r.error } : {};
+              })
+            }
+            title="20 max"
+          >
+            <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} /> {pending ? labels.regenerating : labels.regenerate}
           </Button>
         </div>
       )}
@@ -90,6 +103,12 @@ function Row({
   busy: boolean;
 }) {
   const [text, setText] = useState(item.message);
+  const [lastServerText, setLastServerText] = useState(item.message);
+  if (item.message !== lastServerText) {
+    // A regenerated message arrived from the server: show it.
+    setLastServerText(item.message);
+    setText(item.message);
+  }
   const [saving, start] = useTransition();
   const [saved, setSaved] = useState(false);
   const editable = mode !== "readonly";
@@ -153,6 +172,19 @@ function Row({
                   {labels.save}
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy || saving}
+                onClick={() =>
+                  start(async () => {
+                    await regenerateMessages([item.id]);
+                  })
+                }
+                title={labels.regenerate}
+              >
+                <RefreshCw className={`h-4 w-4 ${saving ? "animate-spin" : ""}`} /> {labels.regenerate}
+              </Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel} title={labels.cancel}>
                 <X className="h-4 w-4" /> {labels.cancel}
               </Button>

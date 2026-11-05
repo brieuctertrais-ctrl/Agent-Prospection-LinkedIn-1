@@ -60,6 +60,9 @@ export default async function AutopilotPage() {
     save: t("apw.saveMessage"),
     score: t("apw.score", { score: "{score}" }),
     error: t("common.error"),
+    regenerate: t("apw.regenerate"),
+    regenerating: t("apw.regenerating"),
+    quota: t("err.quota_exceeded"),
   };
 
   return (

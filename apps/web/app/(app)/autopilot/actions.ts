@@ -78,3 +78,70 @@ export async function pauseCampaign(campaignId: string) {
   revalidatePath("/autopilot");
   return {};
 }
+
+const RegenIds = z.array(z.string().uuid()).min(1).max(20);
+
+/**
+ * Rewrites the messages of pending items with the current copywriting instructions.
+ * Calls the generate-message Edge Function with the user's own session (quota + RLS apply),
+ * then points the queue item to the new message version. Nothing is sent.
+ */
+export async function regenerateMessages(queueIds: string[]) {
+  const ids = RegenIds.safeParse(queueIds);
+  if (!ids.success) return { error: "invalid_request" as const, done: 0 };
+  const { supabase, user } = await requireUser();
+
+  let done = 0;
+  for (const id of ids.data) {
+    const { data: item } = await supabase
+      .from("action_queue")
+      .select("id, status, payload, prospect_id, campaign:campaigns(persona_id)")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const campaign = (Array.isArray(item?.campaign) ? item?.campaign[0] : item?.campaign) as { persona_id?: string } | null;
+    if (!item || item.status !== "pending" || !item.prospect_id || !campaign?.persona_id) continue;
+
+    const { data: p } = await supabase
+      .from("prospects")
+      .select("linkedin_url, full_name, first_name, headline, company, location, about, photo_url, experiences, recent_activity")
+      .eq("id", item.prospect_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!p) continue;
+
+    const { data: gen, error } = await supabase.functions.invoke<{ message_id: string }>("generate-message", {
+      body: {
+        persona_id: campaign.persona_id,
+        mode: "proposal",
+        profile: {
+          linkedin_url: p.linkedin_url,
+          full_name: p.full_name ?? "",
+          first_name: p.first_name ?? "",
+          headline: p.headline ?? "",
+          company: p.company ?? "",
+          location: p.location ?? "",
+          about: p.about ?? "",
+          photo_url: p.photo_url ?? undefined,
+          experiences: p.experiences ?? [],
+          recent_activity: p.recent_activity ?? [],
+        },
+      },
+    });
+    if (error || !gen?.message_id) {
+      const code = (error as { context?: { status?: number } } | null)?.context?.status;
+      if (code === 429 || code === 402) return { error: "quota" as const, done };
+      console.error(JSON.stringify({ where: "regenerate", status: code ?? null }));
+      continue;
+    }
+    const payload = { ...((item.payload as Record<string, unknown>) ?? {}), message_id: gen.message_id };
+    const { error: upErr } = await supabase.from("action_queue").update({ payload }).eq("id", id).eq("user_id", user.id).eq("status", "pending");
+    if (!upErr) {
+      // Already approved items have a lead: keep it pointing to the message that will be sent.
+      await supabase.from("leads").update({ message_id: gen.message_id }).eq("prospect_id", item.prospect_id).eq("user_id", user.id);
+      done += 1;
+    }
+  }
+  revalidatePath("/autopilot");
+  return { done };
+}
