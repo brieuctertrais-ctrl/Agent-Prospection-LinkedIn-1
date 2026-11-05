@@ -185,3 +185,25 @@ select pg_temp.expect((select status from leads where prospect_id = '20000000-00
 select pg_temp.expect((select status from action_queue where id = '70000000-0000-0000-0000-0000000000f3') = 'cancelled', 'pending reminder cancelled on reply');
 reset role;
 \echo ALL REMINDER TESTS PASSED
+
+-- ===== Statistics =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+insert into action_logs (user_id, action_type, result, prospect_id, linkedin_url) values
+  (auth.uid(), 'invitation', 'success', '20000000-0000-0000-0000-00000000000a', 'https://www.linkedin.com/in/alice/'),
+  (auth.uid(), 'invitation', 'success', '20000000-0000-0000-0000-0000000000a2', 'https://www.linkedin.com/in/alice2/'),
+  (auth.uid(), 'invitation', 'success', '20000000-0000-0000-0000-0000000000a2', 'https://www.linkedin.com/in/alice2/');
+update leads set status = 'meeting' where prospect_id = '20000000-0000-0000-0000-0000000000a2';
+select pg_temp.expect((get_stats(30)->>'invited')::int = 2, 'stats: 2 invited (duplicate log counted once)');
+select pg_temp.expect((get_stats(30)->>'accepted')::int = 1 and (get_stats(30)->>'meetings')::int = 1, 'stats: accepted and meetings from lead status');
+select pg_temp.expect(jsonb_array_length(get_stats(30)->'weekly') >= 4, 'stats: weekly series present');
+select pg_temp.expect((get_stats(30)->'personas'->0->>'name') = 'Persona A', 'stats: per-persona row');
+select pg_temp.expect((get_stats(100000)->>'days')::int = 365, 'stats: period capped at 365 days');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((get_stats(30)->>'invited')::int = 0 and jsonb_array_length(get_stats(30)->'personas') = 0, 'B sees none of A statistics');
+reset role;
+set role anon;
+select pg_temp.expect_error($$select get_stats(30)$$, 'anon cannot call get_stats');
+reset role;
+\echo ALL STATS TESTS PASSED

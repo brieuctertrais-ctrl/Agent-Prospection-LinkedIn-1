@@ -5,3 +5,11 @@
 
 :root { color-scheme: dark; }
 body { @apply bg-navy text-slate-100 antialiased; font-family: Inter, system-ui, sans-serif; }
+
+/* Data-viz tokens (dashboard is dark-only). Validated: series contrast >= 3:1 on #2A2F55, CVD-safe pair. */
+.viz-root {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --grid: #363c69;
+  --text-muted: #94a3b8;
+}

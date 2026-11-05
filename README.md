@@ -62,6 +62,7 @@ supabase/          Migration SQL (tables + RLS + fonctions), Edge Functions IA (
 
 | Autopilote — étape B : détection des acceptations (page « Relations », toutes les heures), message de suivi rédigé par l'IA (instructions de suivi par persona), validation dans le dashboard, envoi par la messagerie LinkedIn uniquement aux relations de 1er niveau (jamais d'InMail), quota de messages/jour | ✅ |
 | Autopilote — étape C : détection des réponses (messagerie, toutes les heures + vérification de la conversation juste avant chaque envoi), arrêt immédiat de la séquence, notification ; relances J+3/J+7/J+14 (réglables) rédigées par l'IA selon l'historique, validées dans le dashboard | ✅ |
+| Statistiques : indicateurs clés, entonnoir, envois/acceptations par semaine, résultats par persona (7/30/90 jours) | ✅ |
 
 Suite : voir [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
