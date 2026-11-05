@@ -78,6 +78,18 @@ Ouvre LinkedIn → clique l'icône de l'extension (épingle-la) → **Se connect
 
 ---
 
+# Au quotidien (Windows) — en un double-clic
+
+Dans le dossier `Documents\Agent-Prospection-LinkedIn-1` :
+
+| Fichier | Quand | Ce qu'il fait |
+|---|---|---|
+| `Demarrer-EFI.bat` | Le matin | Démarre le tableau de bord (s'il ne tourne pas déjà) et ouvre Chrome sur l'Autopilote et LinkedIn |
+| `Mettre-a-jour-EFI.bat` | Quand Claude annonce une mise à jour | git pull, dépendances et fonctions IA si nécessaire, reconstruction de l'extension, liste des fichiers SQL à exécuter |
+| `Arreter-EFI.bat` | Si besoin | Arrête le tableau de bord (l'envoi automatique continue tant que Chrome est ouvert) |
+
+Astuce : clic droit sur `Demarrer-EFI.bat` → **Envoyer vers → Bureau (créer un raccourci)**.
+
 # Test sur LinkedIn — checklist
 
 L'interface LinkedIn change souvent ; ce test sert à valider les sélecteurs
