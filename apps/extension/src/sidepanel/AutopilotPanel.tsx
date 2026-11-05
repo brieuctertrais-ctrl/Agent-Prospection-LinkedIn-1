@@ -98,13 +98,14 @@ export function AutopilotPanel({
         stopped: "ap.end.stopped",
         paused: "panel.paused",
         error: "ap.end.error",
+        low_match: "ap.end.low_match",
       };
       setStatus(
         r.end === "paused"
           ? t("panel.paused", { reason: t(`send.${r.code}`) })
           : r.end === "error"
             ? t("ap.end.error", { error: t(`err.${r.code ?? "generic"}`) })
-            : t(key[r.end], { n: r.prepared }),
+            : t(key[r.end], { n: r.prepared, low: r.lowScore ?? 0, min: settings.min_match_score }),
       );
     });
 

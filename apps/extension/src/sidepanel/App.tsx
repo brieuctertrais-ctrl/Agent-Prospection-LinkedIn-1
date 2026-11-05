@@ -34,6 +34,7 @@ type Screen =
       regenerating?: boolean;
     }
   | { name: "empty" }
+  | { name: "lowMatch"; lowScore: number; connected: number }
   | { name: "dailyCap" }
   | { name: "paused"; reason: string }
   | { name: "error"; error: string };
@@ -119,6 +120,7 @@ export function App() {
       const r = await nextProfile(tab.id, persona, settings);
       if (r.kind === "profile") setScreen({ name: "profile", ...r });
       else if (r.kind === "empty") setScreen({ name: "empty" });
+      else if (r.kind === "low_match") setScreen({ name: "lowMatch", lowScore: r.skipped.lowScore, connected: r.skipped.connected });
       else if (r.kind === "daily_cap") setScreen({ name: "dailyCap" });
       else setScreen({ name: "paused", reason: r.code });
     } catch (e) {
@@ -263,6 +265,7 @@ export function App() {
             onEdit={(text) => screen.name === "message" && setScreen({ ...screen, text })}
             onResume={resume}
             noteMax={noteMax}
+            minScore={settings.min_match_score}
             onSearchAgain={async () => {
               if (persona) await resetQueue(persona.id);
               await explore();
@@ -289,6 +292,7 @@ function ScreenView({
   onRetry,
   onSearchAgain,
   noteMax,
+  minScore,
 }: {
   screen: Screen;
   t: (k: string, v?: Record<string, string | number>) => string;
@@ -303,6 +307,7 @@ function ScreenView({
   onRetry: () => void;
   onSearchAgain: () => void;
   noteMax: number;
+  minScore: number;
 }) {
   const next = (
     <GoldButton className="w-full" onClick={onExplore}>
@@ -419,6 +424,14 @@ function ScreenView({
         <EmptyState>
           <Bubble>{t("panel.noMore")}</Bubble>
           <GoldButton className="w-full" onClick={onSearchAgain}>{t("panel.searchAgain")}</GoldButton>
+        </EmptyState>
+      );
+
+    case "lowMatch":
+      return (
+        <EmptyState>
+          <Bubble>{t("panel.lowMatch", { low: screen.lowScore, connected: screen.connected, min: minScore })}</Bubble>
+          <GoldButton className="w-full" onClick={onExplore}>{t("panel.continue")}</GoldButton>
         </EmptyState>
       );
 

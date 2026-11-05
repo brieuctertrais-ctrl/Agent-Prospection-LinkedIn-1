@@ -40,7 +40,7 @@ export async function batchCounts(): Promise<{ toReview: number; approved: numbe
 
 // ---------------------------------------------------------------- preparation
 
-export type PrepareEnd = "done" | "empty" | "daily_cap" | "paused" | "stopped" | "error";
+export type PrepareEnd = "done" | "empty" | "daily_cap" | "paused" | "stopped" | "error" | "low_match";
 
 export async function prepareBatch(opts: {
   tabId: number;
@@ -50,7 +50,7 @@ export async function prepareBatch(opts: {
   noteMax: number;
   onProgress: (prepared: number) => void;
   shouldStop: () => boolean;
-}): Promise<{ prepared: number; end: PrepareEnd; code?: string }> {
+}): Promise<{ prepared: number; end: PrepareEnd; code?: string; lowScore?: number }> {
   const uid = await userId();
   const { data: campaign, error } = await supabase
     .from("campaigns")
@@ -60,9 +60,18 @@ export async function prepareBatch(opts: {
   if (error || !campaign) return { prepared: 0, end: "error", code: "generic" };
 
   let prepared = 0;
+  let lowRounds = 0;
+  let lowScore = 0;
   while (prepared < opts.size) {
     if (opts.shouldStop()) return { prepared, end: "stopped" };
     const r = await nextProfile(opts.tabId, opts.persona, opts.settings);
+    if (r.kind === "low_match") {
+      // Keep looking, but not forever: 3 rounds of 15 set-aside profiles → let the user adjust the persona.
+      lowScore += r.skipped.lowScore;
+      lowRounds += 1;
+      if (lowRounds >= 3) return { prepared, end: "low_match", lowScore };
+      continue;
+    }
     if (r.kind === "empty") return { prepared, end: "empty" };
     if (r.kind === "daily_cap") return { prepared, end: "daily_cap" };
     if (r.kind === "paused") return { prepared, end: "paused", code: r.code };

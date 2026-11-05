@@ -25,10 +25,18 @@ export type NextResult =
   | { kind: "profile"; profile: ScrapedProfile; prospectId?: string; score?: number; reason?: string }
   | { kind: "empty" }
   | { kind: "daily_cap" }
+  /** Many profiles visited in a row were set aside (low score, already connected, unreadable). */
+  | { kind: "low_match"; skipped: SkipCounts }
   | { kind: "paused"; code: SendCode | string };
 
 const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed"]);
-const MAX_AUTO_SKIPS = 8;
+const MAX_AUTO_SKIPS = 15;
+
+export interface SkipCounts {
+  lowScore: number;
+  connected: number;
+  unreadable: number;
+}
 
 async function pause(code: string, detail?: string): Promise<NextResult> {
   await patchState({ pausedReason: code });
@@ -95,7 +103,8 @@ async function popUrl(personaId: string): Promise<string | undefined> {
  * Profiles below the match score are skipped (and never proposed again).
  */
 export async function nextProfile(tabId: number, persona: Persona, settings: Settings): Promise<NextResult> {
-  for (let skips = 0; skips <= MAX_AUTO_SKIPS; skips++) {
+  const skipped: SkipCounts = { lowScore: 0, connected: 0, unreadable: 0 };
+  for (let skips = 0; skips < MAX_AUTO_SKIPS; skips++) {
     const views = await countToday("profile_view");
     if (views >= (settings.daily_profile_views ?? DEFAULT_QUOTAS.dailyProfileViews)) return { kind: "daily_cap" };
 
@@ -111,9 +120,13 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
     if (!res.ok) {
       if (PAUSE_CODES.has(res.code)) return pause(res.code, res.detail);
       await logAction("profile_view", "failure", { code: res.code, detail: res.detail }, { linkedin_url: url });
+      skipped.unreadable += 1;
       continue;
     }
-    if (res.type !== "PROFILE") continue;
+    if (res.type !== "PROFILE") {
+      skipped.unreadable += 1;
+      continue;
+    }
     const profile = res.profile;
     await logAction("profile_view", "success", {}, { linkedin_url: profile.linkedin_url });
 
@@ -122,6 +135,7 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
       if (auth.user) {
         await supabase.from("exclusion_list").upsert({ user_id: auth.user.id, linkedin_url: profile.linkedin_url, reason: profile.connection_state });
       }
+      skipped.connected += 1;
       continue;
     }
 
@@ -131,6 +145,7 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
         if (s.score < settings.min_match_score) {
           await recordLowScore(persona.id, s.prospect_id);
           await logAction("score", "skipped", { score: s.score, reason: s.reason }, { prospect_id: s.prospect_id, linkedin_url: profile.linkedin_url });
+          skipped.lowScore += 1;
           continue;
         }
         return { kind: "profile", profile, prospectId: s.prospect_id, score: s.score, reason: s.reason };
@@ -140,5 +155,5 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
     }
     return { kind: "profile", profile };
   }
-  return { kind: "empty" };
+  return { kind: "low_match", skipped };
 }
