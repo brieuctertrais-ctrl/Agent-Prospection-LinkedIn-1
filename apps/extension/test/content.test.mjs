@@ -135,3 +135,37 @@ test("connections page: lazy-loaded list in an inner scroll container is read up
     await browser.close();
   }
 });
+
+test("inbox: who wrote last; a reminder is never sent over a reply", { timeout: 60000 }, async () => {
+  const inbox = readFileSync(new URL("./inbox.html", import.meta.url), "utf8");
+  const first = readFileSync(new URL("./profile-1st.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/messaging/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: inbox }));
+    await page.goto("https://www.linkedin.com/messaging/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    const convs = await page.evaluate(() => window.kairo.scrapeInbox());
+    assert.deepEqual(convs, [
+      { name: "Vincent BESSON", fromMe: false },
+      { name: "Mathilde MARTELLY SEVENET", fromMe: true },
+    ]);
+
+    // Conversation whose last message comes from the prospect → refuse to send.
+    const withReply = first.replace(
+      "shadow.innerHTML = '<form",
+      "shadow.innerHTML = '<ul><li class=\"msg-s-message-list__event\"><div class=\"msg-s-event-listitem\">Moi</div></li><li class=\"msg-s-message-list__event\"><div class=\"msg-s-event-listitem msg-s-event-listitem--other\">Oui, appelez-moi</div></li></ul><form",
+    );
+    const p2 = await browser.newPage();
+    await p2.route("**/*", (r) => r.abort());
+    await p2.route("https://www.linkedin.com/in/vincent-besson/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: withReply }));
+    await p2.goto("https://www.linkedin.com/in/vincent-besson/", { waitUntil: "domcontentloaded" });
+    await p2.addScriptTag({ content: code });
+    const res = await p2.evaluate(() => window.kairo.sendMessage("Bonjour Monsieur Besson, petite relance ?"));
+    assert.deepEqual(res, { ok: false, code: "replied" });
+    assert.equal(await p2.evaluate(() => window.__sent), undefined);
+  } finally {
+    await browser.close();
+  }
+});

@@ -117,3 +117,38 @@ export function followupPrompt(ctx: PersonaContext, profile: ProfileInput, invit
     "Rédige maintenant le message de suivi.",
   ].filter(Boolean).join("\n\n");
 }
+
+export const REMINDER_SYSTEM = `Tu es un expert en prospection B2B sur LinkedIn. Le prospect a accepté l'invitation et a reçu un ou plusieurs messages (fournis), sans répondre. Tu rédiges une RELANCE courte, envoyée par la messagerie LinkedIn.
+
+Règles impératives :
+1. Entre 200 et 450 caractères. Un seul paragraphe, ou deux très courts.
+2. Commence exactement par « Bonjour Monsieur <Nom>, » ou « Bonjour Madame <Nom>, » (mêmes règles que précédemment : capitalisation normale du nom, civilité déduite du prénom, « Bonjour <Prénom> <Nom>, » en cas de doute). Vouvoiement.
+3. Ne répète pas les messages précédents : apporte UN angle nouveau et concret (un bénéfice, un enjeu du moment pour son type d'entreprise, une question simple sur sa situation), en restant dans le cadre de l'offre. N'invente aucun chiffre ni fait.
+4. Ton cordial, jamais insistant ni culpabilisant (pas de « je n'ai pas eu de retour », pas de « je me permets de relancer »).
+5. Termine par UNE question fermée, facile à répondre.
+6. Si c'est la dernière relance, dis-le avec élégance (ex. : « je ne vous relancerai plus ») et laisse la porte ouverte.
+7. Respecte les instructions de suivi de l'utilisateur si elles existent. Pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
+
+Réponds UNIQUEMENT avec le texte du message.`;
+
+export function reminderPrompt(
+  ctx: PersonaContext,
+  profile: ProfileInput,
+  history: { kind: string; text: string }[],
+  step: number,
+  isLast: boolean,
+  previous?: string,
+  feedback?: string,
+): string {
+  const past = history.map((h) => `- ${h.kind === "invitation" ? "Note d'invitation" : h.kind === "followup_1" ? "Message de suivi" : "Relance"} : ${clip(h.text, 900)}`).join("\n");
+  return [
+    `## Offre\n${formatOffer(ctx)}`,
+    ctx.copywriting?.followup_instructions ? `## Instructions pour les messages de suivi\n${clip(ctx.copywriting.followup_instructions, 1500)}` : "",
+    `## Messages déjà envoyés (sans réponse)\n${past || "(aucun)"}`,
+    `## Profil du prospect\n${formatProfile(profile)}`,
+    `## Relance n°${step}${isLast ? " — DERNIÈRE relance" : ""}`,
+    previous ? `## Version précédente (propose une version nettement différente)\n${clip(previous, 900)}` : "",
+    feedback ? `## Correction demandée\n${feedback}` : "",
+    "Rédige maintenant la relance.",
+  ].filter(Boolean).join("\n\n");
+}

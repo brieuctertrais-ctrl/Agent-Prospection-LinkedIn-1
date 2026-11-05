@@ -7,6 +7,8 @@ import { cancelQueueItem, regenerateMessages, reviewBatch, updateQueuedMessage }
 export interface QueueItem {
   id: string;
   kind: "invitation" | "message";
+  /** followup_1 (first follow-up) or followup_2..4 (reminders). */
+  msgKind: string | null;
   status: string;
   needsApproval: boolean;
   error: string | null;
@@ -21,7 +23,8 @@ export interface QueueItem {
 }
 
 type Labels = Record<
-  "selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota" | "kindInvitation" | "kindMessage",
+  | "selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota"
+  | "kindInvitation" | "kindMessage" | "followup_1" | "followup_2" | "followup_3" | "followup_4",
   string
 >;
 
@@ -142,7 +145,7 @@ function Row({
         </div>
         <p className="mt-2 line-clamp-2 text-xs text-slate-300">{item.headline}</p>
         <p className="text-xs text-slate-400">{[item.company, item.location].filter(Boolean).join(" · ")}</p>
-        <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{item.kind === "message" ? labels.kindMessage : labels.kindInvitation}</p>
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{item.kind === "message" ? (labels[(item.msgKind ?? "") as keyof Labels] ?? labels.kindMessage) : labels.kindInvitation}</p>
         {item.error && <p className="mt-1 text-xs text-red-300">{item.error}</p>}
       </div>
       <div className="flex-1 space-y-2">

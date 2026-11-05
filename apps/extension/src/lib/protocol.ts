@@ -7,6 +7,7 @@ export type ContentRequest =
   | { type: "SCRAPE_SEARCH_RESULTS" }
   | { type: "SEND_INVITATION"; note: string }
   | { type: "SCRAPE_CONNECTIONS" }
+  | { type: "SCRAPE_INBOX" }
   | { type: "SEND_MESSAGE"; text: string }
   | { type: "CHECK_HEALTH" };
 
@@ -30,6 +31,7 @@ export type ContentResponse =
   | { ok: true; type: "INVITATION_SENT"; noteLimit?: number }
   | { ok: true; type: "HEALTH" }
   | { ok: true; type: "CONNECTIONS"; urls: string[] }
+  | { ok: true; type: "INBOX"; conversations: { name: string; fromMe: boolean }[] }
   | { ok: true; type: "MESSAGE_SENT" }
   | { ok: false; code: SendCode | "not_a_profile" | "unknown" | string; detail?: string };
 

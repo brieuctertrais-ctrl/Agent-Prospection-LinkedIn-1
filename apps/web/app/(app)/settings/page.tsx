@@ -53,6 +53,22 @@ export default async function SettingsPage() {
                 <Input id={k} name={k} type="number" defaultValue={s?.[k]} />
               </div>
             ))}
+            <div className="sm:col-span-2">
+              <Label>{t("settings.followupDelays")}</Label>
+              <div className="flex gap-3">
+                {[0, 1, 2].map((i) => (
+                  <Input
+                    key={i}
+                    name={`delay_${i + 1}`}
+                    type="number"
+                    min={1}
+                    max={120}
+                    defaultValue={(s?.followup_delays as number[] | undefined)?.[i] ?? [3, 7, 14][i]}
+                    aria-label={`J+ ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
             <div>
               <Label htmlFor="timezone">Fuseau horaire</Label>
               <Input id="timezone" name="timezone" defaultValue={s?.timezone} />

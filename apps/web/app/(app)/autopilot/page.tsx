@@ -29,10 +29,11 @@ export default async function AutopilotPage() {
 
   const items: QueueItem[] = (rows ?? []).map((r) => {
     const p = (Array.isArray(r.prospect) ? r.prospect[0] : r.prospect) as Record<string, string | number | null> | null;
-    const payload = (r.payload ?? {}) as { message_id?: string; needs_approval?: boolean };
+    const payload = (r.payload ?? {}) as { message_id?: string; needs_approval?: boolean; kind?: string };
     return {
       id: r.id,
       kind: r.action_type === "message" ? ("message" as const) : ("invitation" as const),
+      msgKind: payload.kind ?? null,
       status: r.status,
       needsApproval: payload.needs_approval === true,
       error: r.error,
@@ -67,6 +68,10 @@ export default async function AutopilotPage() {
     quota: t("err.quota_exceeded"),
     kindInvitation: t("apw.kind.invitation"),
     kindMessage: t("apw.kind.message"),
+    followup_1: t("apw.kind.followup_1"),
+    followup_2: t("apw.kind.followup_2"),
+    followup_3: t("apw.kind.followup_3"),
+    followup_4: t("apw.kind.followup_4"),
   };
 
   return (

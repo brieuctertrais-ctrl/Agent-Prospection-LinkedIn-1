@@ -12,6 +12,7 @@ export interface Settings {
   daily_invitations: number;
   weekly_invitations: number;
   daily_messages?: number;
+  followup_delays?: number[];
   min_match_score: number;
   min_delay_seconds?: number;
   max_delay_seconds?: number;

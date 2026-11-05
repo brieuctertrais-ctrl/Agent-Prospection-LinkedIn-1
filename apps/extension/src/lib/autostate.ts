@@ -17,6 +17,8 @@ export interface AutoState {
   lastAcceptCheck?: number;
   lastAccepted?: number;
   lastFound?: number;
+  lastReplied?: number;
+  lastReminders?: number;
   lastProposed?: number;
   lastAt?: number;
   /** Last outcome, as an i18n key suffix (sent, failed, outside_hours, quota, none, paused, paused_by_user). */

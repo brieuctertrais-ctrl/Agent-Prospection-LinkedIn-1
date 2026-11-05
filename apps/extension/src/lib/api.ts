@@ -103,5 +103,7 @@ export async function fetchPersona(id: string): Promise<Persona | null> {
 }
 
 /** First follow-up message for an accepted invitation (reviewed later in the dashboard). */
-export const generateFollowup = (prospect_id: string, previous_text?: string) =>
-  invoke<{ message_id: string; text: string; chars: number }>("generate-followup", { prospect_id, ...(previous_text ? { previous_text } : {}) });
+export type FollowupKind = "followup_1" | "followup_2" | "followup_3" | "followup_4";
+
+export const generateFollowup = (prospect_id: string, kind: FollowupKind = "followup_1", previous_text?: string) =>
+  invoke<{ message_id: string; text: string; chars: number }>("generate-followup", { prospect_id, kind, ...(previous_text ? { previous_text } : {}) });

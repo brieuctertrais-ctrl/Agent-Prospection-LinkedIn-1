@@ -61,8 +61,9 @@ supabase/          Migration SQL (tables + RLS + fonctions), Edge Functions IA (
 | Autopilote — étape A : préparation d'un lot (10/15/20 profils, rien n'est envoyé), validation dans le dashboard (`/autopilot` : corriger, valider, rejeter, annuler, mettre en pause), puis envoi **automatique en arrière-plan** (onglet LinkedIn épinglé, réveil chaque minute, panneau fermable, notifications Windows), à rythme humain (plages horaires, délais aléatoires, quotas jour/semaine, montée en charge sur 2 semaines, arrêt sur tout avertissement LinkedIn, une campagne active à la fois) | ✅ |
 
 | Autopilote — étape B : détection des acceptations (page « Relations », toutes les heures), message de suivi rédigé par l'IA (instructions de suivi par persona), validation dans le dashboard, envoi par la messagerie LinkedIn uniquement aux relations de 1er niveau (jamais d'InMail), quota de messages/jour | ✅ |
+| Autopilote — étape C : détection des réponses (messagerie, toutes les heures + vérification de la conversation juste avant chaque envoi), arrêt immédiat de la séquence, notification ; relances J+3/J+7/J+14 (réglables) rédigées par l'IA selon l'historique, validées dans le dashboard | ✅ |
 
-Suite (relances J+3/J+7/J+14, détection des réponses) : voir [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Suite : voir [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Installation
 

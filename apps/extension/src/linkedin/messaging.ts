@@ -53,7 +53,46 @@ export async function scrapeConnections(max = 120, target = 40): Promise<string[
   return collect(max);
 }
 
+export const INBOX_URL = "https://www.linkedin.com/messaging/";
+
+export interface Conversation {
+  name: string;
+  /** The last message of the conversation was written by the user (snippet "Vous : …"). */
+  fromMe: boolean;
+}
+
+/** Most recent conversations of the inbox: participant name + who wrote last. */
+export async function scrapeInbox(max = 40): Promise<Conversation[]> {
+  await sleep(1500 + Math.random() * 1000);
+  const items = deepQueryAll<HTMLElement>("li.msg-conversation-listitem, li[class*='conversation-listitem'], [class*='msg-conversation-card']")
+    .filter((li) => (li.innerText || "").trim().length > 0);
+  const seen = new Set<HTMLElement>();
+  const out: Conversation[] = [];
+  for (const li of items) {
+    const root = (li.closest("li") as HTMLElement | null) ?? li;
+    if (seen.has(root)) continue;
+    seen.add(root);
+    const nameEl = root.querySelector<HTMLElement>("[class*='participant-names'], h3, [class*='__title']");
+    const snippetEl = root.querySelector<HTMLElement>("[class*='message-snippet'], [class*='snippet'], p");
+    const name = text(nameEl).split("\n")[0].trim();
+    const snippet = text(snippetEl);
+    if (!name) continue;
+    out.push({ name: name.slice(0, 200), fromMe: /^(vous|you)\s*:/i.test(snippet) });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 export type MessageResult = { ok: true } | { ok: false; code: string; detail?: string };
+
+/** True when the last message of the open conversation was written by the other person. */
+function lastMessageFromOther(): boolean {
+  const events = deepQueryAll<HTMLElement>("li[class*='msg-s-message-list__event'], [class*='msg-s-event-listitem']").filter(isReallyVisible);
+  const last = events[events.length - 1];
+  if (!last) return false;
+  const holder = last.matches("[class*='msg-s-event-listitem']") ? last : last.querySelector<HTMLElement>("[class*='msg-s-event-listitem']") ?? last;
+  return /msg-s-event-listitem--other/.test(holder.className);
+}
 
 function isFirstDegree(card: HTMLElement | null): boolean {
   return Boolean(card && /(^|\n|·)\s*1\s*(er|st)\b/i.test(card.innerText || ""));
@@ -94,6 +133,8 @@ export async function sendMessage(body: string): Promise<MessageResult> {
   const box = await waitFor(() => composer(), 8000);
   if (!box) return { ok: false, code: "composer_not_found" };
   if (composerText(box).length > 0) return { ok: false, code: "composer_not_empty" }; // never overwrite a draft
+  // The prospect may have answered since the last inbox check: never send a reminder over a reply.
+  if (lastMessageFromOther()) return { ok: false, code: "replied" };
   box.focus();
   await humanPause(400, 900);
 

@@ -11,12 +11,12 @@
  *  - every action is logged (action_logs).
  */
 import type { Persona } from "@kairo/shared";
-import { ApiError, countToday, countWeek, generateFollowup, generateMessage, logAction } from "./api";
+import { ApiError, countToday, countWeek, generateFollowup, generateMessage, logAction, type FollowupKind } from "./api";
 import { nextProfile, type Settings, type SkipEvent } from "./engine";
 import { patchState } from "./storage";
 import { supabase } from "./supabase";
 import { navigate, sendToTab } from "./tabs";
-import { CONNECTIONS_URL } from "../linkedin/messaging";
+import { CONNECTIONS_URL, INBOX_URL } from "../linkedin/messaging";
 import { sleep } from "../linkedin/dom";
 
 const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed"]);
@@ -243,6 +243,13 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   }
   if (res.ok) return { kind: "failed", code: "unknown" };
 
+  if (res.code === "replied") {
+    // The prospect answered in the meantime: stop the sequence, nothing was sent.
+    await supabase.from("action_queue").update({ status: "cancelled", error: "replied" }).eq("id", item.id);
+    await supabase.rpc("mark_replied", { p_prospects: [item.prospect_id] });
+    await logAction("reply_detected", "success", { before_send: true }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
+    return { kind: "failed", code: "replied" };
+  }
   await fail(res.code);
   if (PAUSE_CODES.has(res.code)) {
     // LinkedIn warning, limit or check: stop everything, the user resumes manually (never worked around).
@@ -320,6 +327,99 @@ export async function proposeFollowups(max = 10): Promise<number> {
       if (!error) proposed += 1;
     } catch (e) {
       if (e instanceof ApiError && e.message !== "generic") break; // quota / session: stop for now
+    }
+  }
+  return proposed;
+}
+
+// ---------------------------------------------------------------- replies & reminders
+
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Reads the most recent conversations of the inbox. Accepted leads whose conversation's last
+ * message is from them are marked "replied" and their pending messages are cancelled.
+ */
+export async function checkReplies(tabId: number): Promise<{ replied: string[]; code?: string }> {
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("prospect_id, prospect:prospects(full_name)")
+    .eq("status", "accepted")
+    .limit(500);
+  if (!leads?.length) return { replied: [] };
+
+  await navigate(tabId, INBOX_URL);
+  await sleep(2500 + Math.random() * 2000);
+  const res = await sendToTab(tabId, { type: "SCRAPE_INBOX" });
+  if (!res.ok) {
+    if (PAUSE_CODES.has(res.code)) {
+      await patchState({ pausedReason: res.code });
+      await logAction("pause", "skipped", { code: res.code, autopilot: true, step: "replies" });
+    }
+    return { replied: [], code: res.code };
+  }
+  if (res.type !== "INBOX") return { replied: [], code: "unknown" };
+  await logAction("inbox_check", "success", { found: res.conversations.length });
+
+  const answered = new Set(res.conversations.filter((c) => !c.fromMe).map((c) => norm(c.name)));
+  const matches = leads.filter((l) => {
+    const p = (Array.isArray(l.prospect) ? l.prospect[0] : l.prospect) as { full_name?: string } | null;
+    return p?.full_name && answered.has(norm(p.full_name));
+  });
+  if (!matches.length) return { replied: [] };
+  const { data } = await supabase.rpc("mark_replied", { p_prospects: matches.map((m) => m.prospect_id) });
+  const ids = new Set((data as string[] | null) ?? []);
+  return {
+    replied: matches
+      .filter((m) => ids.has(m.prospect_id))
+      .map((m) => ((Array.isArray(m.prospect) ? m.prospect[0] : m.prospect) as { full_name?: string }).full_name ?? ""),
+  };
+}
+
+/**
+ * Prepares the next reminder (J+3, J+7, J+14 after the first follow-up, editable) for accepted
+ * leads without reply. Reminders are reviewed in the dashboard before being sent.
+ */
+export async function proposeReminders(settings: Settings, max = 10): Promise<number> {
+  const uid = await userId();
+  const delays = settings.followup_delays?.length === 3 ? settings.followup_delays : [3, 7, 14];
+  const { data: leads } = await supabase.from("leads").select("prospect_id").eq("status", "accepted").limit(200);
+  const ids = (leads ?? []).map((l) => l.prospect_id);
+  if (!ids.length) return 0;
+
+  const { data: msgs } = await supabase
+    .from("action_queue")
+    .select("prospect_id, status, payload, updated_at")
+    .eq("action_type", "message")
+    .in("prospect_id", ids)
+    .in("status", ["pending", "done"]);
+
+  let proposed = 0;
+  for (const prospectId of ids) {
+    if (proposed >= max) break;
+    const mine = (msgs ?? []).filter((m) => m.prospect_id === prospectId);
+    const kindOf = (m: { payload: unknown }) => (m.payload as { kind?: string })?.kind ?? "";
+    if (mine.some((m) => m.status === "pending")) continue; // something already waiting
+    const first = mine.find((m) => kindOf(m) === "followup_1" && m.status === "done");
+    if (!first) continue; // the sequence starts after the first follow-up is sent
+    const sentKinds = new Set(mine.filter((m) => m.status === "done").map(kindOf));
+    const next = (["followup_2", "followup_3", "followup_4"] as FollowupKind[]).find((k) => !sentKinds.has(k));
+    if (!next) continue; // sequence finished
+    const step = ["followup_2", "followup_3", "followup_4"].indexOf(next);
+    const due = new Date(first.updated_at).getTime() + delays[step] * 86_400_000;
+    if (Date.now() < due) continue;
+    try {
+      const msg = await generateFollowup(prospectId, next);
+      const { error } = await supabase.from("action_queue").insert({
+        user_id: uid,
+        prospect_id: prospectId,
+        action_type: "message",
+        payload: { needs_approval: true, kind: next, message_id: msg.message_id },
+      });
+      if (!error) proposed += 1;
+    } catch (e) {
+      if (e instanceof ApiError && e.message !== "generic") break;
     }
   }
   return proposed;

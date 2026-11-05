@@ -4,7 +4,7 @@
  * as long as Chrome is open. All safeguards are in sendOne() (hours, quotas, warm-up, LinkedIn warnings).
  */
 import { translate, type Locale, type MessageKey } from "@kairo/shared";
-import { checkAcceptances, inWorkingHours, nextDelaySeconds, sendOne } from "../lib/autopilot";
+import { checkAcceptances, checkReplies, inWorkingHours, nextDelaySeconds, proposeReminders, sendOne } from "../lib/autopilot";
 import type { Settings } from "../lib/engine";
 import { getAuto, patchAuto } from "../lib/autostate";
 import { getState, patchState, today } from "../lib/storage";
@@ -98,9 +98,26 @@ export async function tick(): Promise<void> {
       if (a.code && ["security_check", "limit_reached", "ui_changed"].includes(a.code)) {
         await patchAuto({ enabled: false, last: "paused", lastCode: a.code, lastAt: Date.now() });
         await notify("paused", "bg.paused", { reason: translate("fr", `send.${a.code}` as MessageKey) });
-      } else if (a.accepted > 0 || a.proposed > 0) {
+        return;
+      }
+      if (a.accepted > 0 || a.proposed > 0) {
         await notify("accepted", "bg.accepted", { accepted: a.accepted, proposed: a.proposed });
       }
+
+      // Replies: stop the sequence of anyone who answered, and tell the user.
+      await sleep(4000 + Math.random() * 4000);
+      const r = await checkReplies(tabId);
+      if (r.code && ["security_check", "limit_reached", "ui_changed"].includes(r.code)) {
+        await patchAuto({ enabled: false, last: "paused", lastCode: r.code, lastAt: Date.now() });
+        await notify("paused", "bg.paused", { reason: translate("fr", `send.${r.code}` as MessageKey) });
+        return;
+      }
+      if (r.replied.length) await notify("replied", "bg.replied", { n: r.replied.length, names: r.replied.slice(0, 3).join(", ") });
+
+      // Reminders due today (J+3 / J+7 / J+14 by default), to be reviewed in the dashboard.
+      const reminders = await proposeReminders(settings);
+      await patchAuto({ lastReplied: r.replied.length, lastReminders: reminders });
+      if (reminders > 0) await notify("reminders", "bg.reminders", { n: reminders });
       return;
     }
 

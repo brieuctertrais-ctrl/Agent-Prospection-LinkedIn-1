@@ -106,8 +106,9 @@ export async function regenerateMessages(queueIds: string[]) {
 
     if (item.action_type === "message") {
       // Follow-up message: rewritten from the stored profile by the generate-followup function.
+      const kind = (item.payload as { kind?: string } | null)?.kind;
       const { data: gen, error } = await supabase.functions.invoke<{ message_id: string }>("generate-followup", {
-        body: { prospect_id: item.prospect_id },
+        body: { prospect_id: item.prospect_id, kind: ["followup_1", "followup_2", "followup_3", "followup_4"].includes(kind ?? "") ? kind : "followup_1" },
       });
       if (error || !gen?.message_id) {
         const code = (error as { context?: { status?: number } } | null)?.context?.status;

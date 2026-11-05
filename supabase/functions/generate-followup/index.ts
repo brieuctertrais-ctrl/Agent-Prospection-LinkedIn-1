@@ -1,12 +1,13 @@
-// POST { prospect_id, previous_text? } → { message_id, text, chars }
-// First follow-up message after an accepted invitation (LinkedIn messaging).
+// POST { prospect_id, kind?, previous_text? } → { message_id, text, chars }
+// kind "followup_1": first follow-up after an accepted invitation.
+// kind "followup_2".."followup_4": reminders #1..#3 (no reply), aware of every message already sent.
 // Nothing is sent here: the message is reviewed by the user in the dashboard.
 import { z } from "zod";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { errorResponse, HttpError } from "../_shared/errors.ts";
 import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClient } from "../_shared/supabase.ts";
 import { complete, sanitizeAiText } from "../_shared/claude.ts";
-import { FOLLOWUP_SYSTEM, followupPrompt } from "../_shared/prompts.ts";
+import { FOLLOWUP_SYSTEM, followupPrompt, REMINDER_SYSTEM, reminderPrompt } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema } from "../_shared/profile.ts";
 import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
 
@@ -16,6 +17,7 @@ const MAX_ATTEMPTS = 3;
 
 const BodySchema = z.object({
   prospect_id: z.string().uuid(),
+  kind: z.enum(["followup_1", "followup_2", "followup_3", "followup_4"]).default("followup_1"),
   previous_text: z.string().max(1500).optional(),
 });
 
@@ -45,28 +47,41 @@ Deno.serve(async (req) => {
     if (!profile.first_name) profile.first_name = profile.full_name.split(" ")[0] ?? "";
 
     const ctx = await loadPersonaContext(supabase, userId, personaId);
-    const { data: inv } = await supabase
+    // Latest version of every message kind already written for this prospect (owned rows only).
+    const { data: allMsgs } = await supabase
       .from("messages")
-      .select("text")
+      .select("kind, text, version")
       .eq("prospect_id", p.id)
-      .eq("kind", "invitation")
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq("user_id", userId)
+      .order("version", { ascending: false });
+    const latest = new Map<string, string>();
+    for (const m of allMsgs ?? []) if (!latest.has(m.kind)) latest.set(m.kind, m.text);
+    const inv = { text: latest.get("invitation") ?? "" };
+    const order = ["invitation", "followup_1", "followup_2", "followup_3", "followup_4"];
+    const history = order
+      .slice(0, order.indexOf(body.kind))
+      .filter((k) => latest.has(k))
+      .map((k) => ({ kind: k, text: latest.get(k)! }));
+    const isReminder = body.kind !== "followup_1";
+    const step = order.indexOf(body.kind) - 1; // followup_2 → reminder 1
+    const minChars = isReminder ? 120 : MIN_CHARS;
+    const maxChars = isReminder ? 600 : MAX_CHARS;
 
     let text = "";
     let feedback: string | undefined;
     const lastName = lastNameOf(profile.full_name);
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
-      const out = await complete(FOLLOWUP_SYSTEM, followupPrompt(ctx, profile, inv?.text ?? "", body.previous_text, feedback), 3000);
+      const out = isReminder
+        ? await complete(REMINDER_SYSTEM, reminderPrompt(ctx, profile, history, step, body.kind === "followup_4", body.previous_text, feedback), 2000)
+        : await complete(FOLLOWUP_SYSTEM, followupPrompt(ctx, profile, inv.text, body.previous_text, feedback), 3000);
       await recordAiUsage(supabase, usageId, out.usage);
       text = sanitizeAiText(out.text);
       const chars = [...text].length;
-      const ok = chars >= MIN_CHARS && chars <= MAX_CHARS && greetingOk(text, profile.first_name, lastName);
+      const ok = chars >= minChars && chars <= maxChars && greetingOk(text, profile.first_name, lastName);
       if (ok) break;
-      feedback = `Le message doit faire entre 350 et 800 caractères (actuellement ${chars}) et commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, ». Réécris-le.`;
-      if (attempt < MAX_ATTEMPTS - 1 || chars > MAX_CHARS || chars < 50) text = "";
+      feedback = `Le message doit faire entre ${isReminder ? "200 et 450" : "350 et 800"} caractères (actuellement ${chars}) et commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, ». Réécris-le.`;
+      if (attempt < MAX_ATTEMPTS - 1 || chars > maxChars || chars < 50) text = "";
     }
     if (!text) throw new HttpError(422, "generation_failed");
 
@@ -74,14 +89,14 @@ Deno.serve(async (req) => {
       .from("messages")
       .select("version")
       .eq("prospect_id", p.id)
-      .eq("kind", "followup_1")
+      .eq("kind", body.kind)
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle();
     const version = (last?.version ?? 0) + 1;
     const { data: message, error } = await supabase
       .from("messages")
-      .insert({ user_id: userId, prospect_id: p.id, persona_id: personaId, kind: "followup_1", text, version, regeneration_count: version - 1 })
+      .insert({ user_id: userId, prospect_id: p.id, persona_id: personaId, kind: body.kind, text, version, regeneration_count: version - 1 })
       .select("id")
       .single();
     if (error) throw new Error(`message_insert_failed: ${error.code}`);

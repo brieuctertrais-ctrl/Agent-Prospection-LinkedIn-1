@@ -160,6 +160,7 @@ export function AutopilotPanel({
         }),
       );
     }
+    if (a.lastReplied) parts.push(t("ap.auto.replied", { n: a.lastReplied }));
     if (a.enabled && !inWorkingHours(settings)) parts.push(t("ap.auto.outside", { start: settings.work_start_hour ?? 9, end: settings.work_end_hour ?? 19 }));
     return parts.join(" ");
   };

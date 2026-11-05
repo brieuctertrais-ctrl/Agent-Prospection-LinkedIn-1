@@ -161,3 +161,27 @@ select pg_temp.expect(review_batch(array['70000000-0000-0000-0000-0000000000f2']
 select pg_temp.expect((select payload->>'needs_approval' from action_queue where id = '70000000-0000-0000-0000-0000000000f2') = 'false', 'follow-up ready to send');
 reset role;
 \echo ALL FOLLOWUP TESTS PASSED
+
+-- ===== Step C: reminders + replies =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select followup_delays from user_settings) = '{3,7,14}', 'default reminder delays 3/7/14');
+select pg_temp.expect_error($$update user_settings set followup_delays = '{7,3,14}'$$, 'reminder delays must increase');
+insert into messages (id, user_id, prospect_id, kind, text) values ('30000000-0000-0000-0000-0000000000f3', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'followup_2', 'Bonjour Madame Deux, je me permets de revenir vers vous.');
+insert into action_queue (id, user_id, prospect_id, action_type, payload) values
+  ('70000000-0000-0000-0000-0000000000f3', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'message', '{"needs_approval": false, "kind": "followup_2", "message_id": "30000000-0000-0000-0000-0000000000f3"}');
+select pg_temp.expect_error($$insert into action_queue (user_id, prospect_id, action_type, payload) values (auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'message', '{"kind": "followup_2"}')$$, 'only one reminder of each kind per prospect');
+
+-- B cannot mark A's lead as replied
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((select count(*) from mark_replied(array['20000000-0000-0000-0000-0000000000a2']::uuid[])) = 0, 'B cannot mark A lead replied');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select status from action_queue where id = '70000000-0000-0000-0000-0000000000f3') = 'pending', 'A reminder untouched by B');
+
+-- A: the prospect replied → lead replied, pending messages cancelled
+select pg_temp.expect((select count(*) from mark_replied(array['20000000-0000-0000-0000-0000000000a2']::uuid[])) = 1, 'A marks own lead replied');
+select pg_temp.expect((select status from leads where prospect_id = '20000000-0000-0000-0000-0000000000a2') = 'replied', 'lead status replied');
+select pg_temp.expect((select status from action_queue where id = '70000000-0000-0000-0000-0000000000f3') = 'cancelled', 'pending reminder cancelled on reply');
+reset role;
+\echo ALL REMINDER TESTS PASSED

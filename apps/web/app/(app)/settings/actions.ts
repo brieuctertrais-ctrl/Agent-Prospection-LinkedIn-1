@@ -15,6 +15,9 @@ const SettingsSchema = z
     daily_messages: int(1, 150),
     min_match_score: int(0, 100),
     min_delay_seconds: int(30, 600),
+    delay_1: int(1, 60),
+    delay_2: int(2, 90),
+    delay_3: int(3, 120),
     max_delay_seconds: int(30, 1800),
     work_start_hour: int(0, 23),
     work_end_hour: int(1, 24),
@@ -27,12 +30,19 @@ const SettingsSchema = z
       }
     }),
   })
-  .refine((s) => s.work_end_hour > s.work_start_hour && s.max_delay_seconds >= s.min_delay_seconds);
+  .refine(
+    (s) =>
+      s.work_end_hour > s.work_start_hour &&
+      s.max_delay_seconds >= s.min_delay_seconds &&
+      s.delay_2 > s.delay_1 &&
+      s.delay_3 > s.delay_2,
+  );
 
 export async function saveSettings(fd: FormData) {
   const parsed = SettingsSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return;
-  const { locale, ...settings } = parsed.data;
+  const { locale, delay_1, delay_2, delay_3, ...rest } = parsed.data;
+  const settings = { ...rest, followup_delays: [delay_1, delay_2, delay_3] };
   const { supabase, user } = await requireUser();
   (await cookies()).set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", secure: process.env.NODE_ENV === "production" });
   await supabase.from("profiles").update({ locale }).eq("id", user.id);

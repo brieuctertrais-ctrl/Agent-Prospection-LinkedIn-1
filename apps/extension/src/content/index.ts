@@ -3,7 +3,7 @@ import { scrapeProfile, scrapeSearchResults } from "../linkedin/scraper";
 import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
 import { diagnose } from "../linkedin/topcard";
-import { scrapeConnections, sendMessage } from "../linkedin/messaging";
+import { scrapeConnections, scrapeInbox, sendMessage } from "../linkedin/messaging";
 
 async function handle(req: ContentRequest): Promise<ContentResponse> {
   switch (req.type) {
@@ -39,6 +39,11 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       const w = detectAccountWarning();
       if (w) return { ok: false, code: w };
       return { ok: true, type: "CONNECTIONS", urls: await scrapeConnections() };
+    }
+    case "SCRAPE_INBOX": {
+      const w = detectAccountWarning();
+      if (w) return { ok: false, code: w };
+      return { ok: true, type: "INBOX", conversations: await scrapeInbox() };
     }
     case "SEND_MESSAGE": {
       const r = await sendMessage(req.text);
