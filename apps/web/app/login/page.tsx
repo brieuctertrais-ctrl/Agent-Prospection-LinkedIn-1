@@ -15,7 +15,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <h1 className="text-center text-xl font-semibold">{t("auth.title")}</h1>
         <LoginForm
           next={next ?? "/personas"}
-          labels={{ email: t("auth.email"), send: t("auth.send"), sent: t("auth.sent"), error: t("auth.error"), captcha: t("auth.captcha") }}
+          labels={{ email: t("auth.email"), send: t("auth.send"), sent: t("auth.sent"), error: t("auth.error"), captcha: t("auth.captcha"), rateLimited: t("err.rate_limited") }}
         />
       </div>
     </main>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { requestMagicLink } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +49,7 @@ export function LoginForm({
   labels,
 }: {
   next: string;
-  labels: { email: string; send: string; sent: string; error: string; captcha: string };
+  labels: { email: string; send: string; sent: string; error: string; captcha: string; rateLimited: string };
 }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -64,18 +64,10 @@ export function LoginForm({
       return setState("error");
     }
     setState("sending");
-    const supabase = createClient();
-    const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/personas";
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`,
-        captchaToken: captcha.token ?? undefined,
-      },
-    });
+    const res = await requestMagicLink({ email, captchaToken: captcha.token ?? undefined, next });
     captcha.reset();
-    if (error) {
-      setError(labels.error); // generic message: no detail leaked to the client
+    if (!res.ok) {
+      setError(res.error === "rate_limited" ? labels.rateLimited : labels.error); // generic, details in server log
       setState("error");
     } else setState("sent");
   }
