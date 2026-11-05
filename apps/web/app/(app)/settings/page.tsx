@@ -8,21 +8,22 @@ import { Select } from "@/components/ui/select";
 import { deleteProspectingData, saveSettings } from "./actions";
 
 const FIELDS = [
-  ["daily_profile_views", "Profils consultés / jour"],
-  ["daily_invitations", "Invitations / jour"],
-  ["weekly_invitations", "Invitations / semaine"],
-  ["daily_messages", "Messages / jour"],
-  ["min_match_score", "Score minimum de correspondance (0-100)"],
-  ["min_delay_seconds", "Délai minimum entre deux invitations (s)"],
-  ["max_delay_seconds", "Délai maximum entre deux invitations (s)"],
-  ["work_start_hour", "Début de plage horaire (h)"],
-  ["purge_rejected_after_months", "Conservation des profils rejetés (mois, 1 à 36)"],
-  ["work_end_hour", "Fin de plage horaire (h)"],
+  "daily_profile_views",
+  "daily_invitations",
+  "weekly_invitations",
+  "daily_messages",
+  "min_match_score",
+  "min_delay_seconds",
+  "max_delay_seconds",
+  "work_start_hour",
+  "purge_rejected_after_months",
+  "work_end_hour",
 ] as const;
 
 export default async function SettingsPage() {
   const { supabase, user } = await requireUser();
   const { t, locale } = await getT();
+  const dateLocale = locale === "fr" ? "fr-FR" : "en-GB";
   const [{ data: s }, { data: sub }] = await Promise.all([
     supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
     supabase.from("subscriptions").select("plan, status, trial_ends_at").eq("user_id", user.id).single(),
@@ -33,8 +34,10 @@ export default async function SettingsPage() {
       <h1 className="text-3xl font-bold">{t("settings.title")}</h1>
       {sub && (
         <Card className="p-5 text-sm">
-          Offre : <b className="text-gold">{sub.plan}</b>
-          {sub.plan === "trial" && <> — essai jusqu&apos;au {new Date(sub.trial_ends_at).toLocaleDateString("fr-FR")}</>}
+          {t("settings.plan")} <b className="text-gold">{sub.plan === "trial" ? t("settings.plan.trial") : sub.plan}</b>
+          {sub.plan === "trial" && sub.trial_ends_at && (
+            <> — {t("settings.trialUntil", { date: new Date(sub.trial_ends_at).toLocaleDateString(dateLocale) })}</>
+          )}
         </Card>
       )}
       <Card>
@@ -48,9 +51,9 @@ export default async function SettingsPage() {
           </div>
           <CardTitle className="mb-0 mt-4">{t("settings.quotas")}</CardTitle>
           <div className="grid gap-4 sm:grid-cols-2">
-            {FIELDS.map(([k, label]) => (
+            {FIELDS.map((k) => (
               <div key={k}>
-                <Label htmlFor={k}>{label}</Label>
+                <Label htmlFor={k}>{t(`settings.field.${k}`)}</Label>
                 <Input id={k} name={k} type="number" defaultValue={s?.[k]} />
               </div>
             ))}
@@ -65,13 +68,13 @@ export default async function SettingsPage() {
                     min={1}
                     max={120}
                     defaultValue={(s?.followup_delays as number[] | undefined)?.[i] ?? [3, 7, 14][i]}
-                    aria-label={`J+ ${i + 1}`}
+                    aria-label={t("settings.followupDay", { n: i + 2 })}
                   />
                 ))}
               </div>
             </div>
             <div>
-              <Label htmlFor="timezone">Fuseau horaire</Label>
+              <Label htmlFor="timezone">{t("settings.timezone")}</Label>
               <Input id="timezone" name="timezone" defaultValue={s?.timezone} />
             </div>
           </div>

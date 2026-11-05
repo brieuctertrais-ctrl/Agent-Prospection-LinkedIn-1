@@ -9,7 +9,7 @@ import { extractText, MAX_CHARS } from "@/lib/extract-text";
 import { addDoc } from "./actions";
 
 type Labels = Record<
-  "title" | "content" | "save" | "import" | "importHelp" | "reading" | "truncated" | "tooLarge" | "unsupported" | "noText" | "error",
+  "title" | "content" | "save" | "import" | "importHelp" | "reading" | "truncated" | "tooLarge" | "unsupported" | "noText" | "error" | "numberLocale",
   string
 >;
 
@@ -88,7 +88,7 @@ export function KnowledgeForm({ labels }: { labels: Labels }) {
           className="min-h-[220px]"
         />
         <p className="mt-1 text-right text-xs text-slate-500">
-          {content.length.toLocaleString("fr-FR")} / {MAX_CHARS.toLocaleString("fr-FR")}
+          {content.length.toLocaleString(labels.numberLocale)} / {MAX_CHARS.toLocaleString(labels.numberLocale)}
         </p>
       </div>
       <Button type="submit">{labels.save}</Button>

@@ -8,7 +8,7 @@ import { KnowledgeForm } from "./knowledge-form";
 
 export default async function KnowledgePage() {
   const { supabase } = await requireUser();
-  const { t } = await getT();
+  const { t, locale } = await getT();
   const { data: docs } = await supabase.from("knowledge_docs").select("id, title, content").order("created_at", { ascending: false });
 
   return (
@@ -31,6 +31,7 @@ export default async function KnowledgePage() {
             unsupported: t("knowledge.unsupported"),
             noText: t("knowledge.noText"),
             error: t("common.error"),
+            numberLocale: locale === "fr" ? "fr-FR" : "en-GB",
           }}
         />
       </Card>
