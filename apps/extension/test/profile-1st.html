@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Vincent BESSON | LinkedIn</title></head><body>
+<!-- Fixture: 1st-degree connection, messaging overlay rendered in an open shadow root. -->
+<div class="a1">
+  <section>
+    <h1>Vincent BESSON</h1><span> · 1er</span>
+    <div>Directeur administratif et financier chez Andre Renault</div>
+    <div><span>Nantes, Pays de la Loire, France</span></div>
+    <div id="actions"><button aria-label="Envoyer un message à Vincent BESSON">Message</button><button>Plus</button></div>
+  </section>
+</div>
+<div id="msg-host"></div>
+<script>
+  const shadow = document.getElementById('msg-host').attachShadow({ mode: 'open' });
+  document.querySelector('#actions button').addEventListener('click', () => {
+    shadow.innerHTML = '<form class="msg-form"><div class="msg-form__contenteditable" contenteditable="true" role="textbox" aria-label="Rédigez un message…" style="min-height:40px;width:300px"></div><button type="submit" class="msg-form__send-button" disabled>Envoyer</button></form>';
+    const box = shadow.querySelector('[contenteditable]'); const send = shadow.querySelector('button');
+    box.addEventListener('input', () => { send.disabled = !box.innerText.trim(); });
+    shadow.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); window.__sent = box.innerText; box.innerHTML = ''; send.disabled = true; });
+  });
+</script>
+</body></html>

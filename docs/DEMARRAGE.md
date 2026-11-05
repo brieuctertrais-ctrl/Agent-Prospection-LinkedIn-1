@@ -20,7 +20,8 @@ pour des dizaines de messages).
    `supabase/migrations/20261104000000_init.sql` puis **Run** ; recommence avec
    `supabase/migrations/20261105000000_security_hardening.sql`, puis
    `supabase/migrations/20261106000000_autopilot_batch.sql`, puis
-   `supabase/migrations/20261107000000_persona_limits.sql` (dans cet ordre, sans erreur).
+   `supabase/migrations/20261107000000_persona_limits.sql`, puis
+   `supabase/migrations/20261108000000_followups.sql` (dans cet ordre, sans erreur).
 4. **Authentication → URL Configuration** :
    - Site URL : `http://localhost:3000`
    - Redirect URLs : ajoute `http://localhost:3000/auth/callback`
@@ -42,6 +43,7 @@ npx supabase link --project-ref <Reference ID>
 npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 npx supabase functions deploy generate-message
 npx supabase functions deploy score-profile
+npx supabase functions deploy generate-followup
 ```
 La clé Claude reste ainsi côté serveur (jamais dans l'extension ni dans le navigateur).
 

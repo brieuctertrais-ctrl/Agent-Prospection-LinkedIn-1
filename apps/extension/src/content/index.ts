@@ -3,6 +3,7 @@ import { scrapeProfile, scrapeSearchResults } from "../linkedin/scraper";
 import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
 import { diagnose } from "../linkedin/topcard";
+import { scrapeConnections, sendMessage } from "../linkedin/messaging";
 
 async function handle(req: ContentRequest): Promise<ContentResponse> {
   switch (req.type) {
@@ -33,6 +34,17 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       }
       const r = scrapeSearchResults();
       return { ok: true, type: "SEARCH_RESULTS", ...r };
+    }
+    case "SCRAPE_CONNECTIONS": {
+      const w = detectAccountWarning();
+      if (w) return { ok: false, code: w };
+      return { ok: true, type: "CONNECTIONS", urls: await scrapeConnections() };
+    }
+    case "SEND_MESSAGE": {
+      const r = await sendMessage(req.text);
+      if (r.ok) return { ok: true, type: "MESSAGE_SENT" };
+      const structural = ["ui_changed", "message_button_not_found", "composer_not_found", "send_not_found", "message_not_sent"];
+      return { ok: false, code: r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
     case "SEND_INVITATION": {
       const r = await sendInvitation(req.note);

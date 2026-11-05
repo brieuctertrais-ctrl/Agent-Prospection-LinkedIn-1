@@ -134,3 +134,30 @@ insert into personas (user_id, name, job_titles, keywords)
 select pg_temp.expect_error($$insert into personas (user_id, name, job_titles) values (auth.uid(), 'Onze', array['a','b','c','d','e','f','g','h','i','j','k'])$$, '11 job titles rejected');
 reset role;
 \echo ALL PERSONA LIMIT TESTS PASSED
+
+-- ===== Step B: acceptances + follow-ups =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+update leads set status = 'invitation_sent' where prospect_id = '20000000-0000-0000-0000-0000000000a2';
+select pg_temp.expect((select count(*) from mark_accepted(array['https://www.linkedin.com/in/alice2/','https://www.linkedin.com/in/other/'])) = 1, 'A lead marked accepted from connections list');
+select pg_temp.expect((select status from leads where prospect_id = '20000000-0000-0000-0000-0000000000a2') = 'accepted', 'lead status is accepted');
+insert into messages (id, user_id, prospect_id, kind, text) values ('30000000-0000-0000-0000-0000000000f1', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'followup_1', 'Bonjour Madame Deux, merci pour la connexion !');
+insert into action_queue (id, user_id, prospect_id, action_type, payload) values
+  ('70000000-0000-0000-0000-0000000000f1', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'message', '{"needs_approval": true, "kind": "followup_1", "message_id": "30000000-0000-0000-0000-0000000000f1"}');
+select pg_temp.expect_error($$insert into action_queue (user_id, prospect_id, action_type, payload) values (auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'message', '{"needs_approval": true, "kind": "followup_1"}')$$, 'only one follow-up #1 per prospect');
+
+-- B cannot mark A's leads accepted nor review A's follow-up
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((select count(*) from mark_accepted(array['https://www.linkedin.com/in/alice/'])) = 0, 'B cannot mark A leads accepted');
+select pg_temp.expect(review_batch(array['70000000-0000-0000-0000-0000000000f1']::uuid[], null) = 0, 'B cannot approve A follow-up');
+
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect(review_batch(null, array['70000000-0000-0000-0000-0000000000f1']::uuid[]) = 1, 'A rejects own follow-up');
+select pg_temp.expect((select count(*) from exclusion_list where linkedin_url = 'https://www.linkedin.com/in/alice2/') = 0, 'rejecting a follow-up does not exclude the contact');
+insert into action_queue (id, user_id, prospect_id, action_type, payload) values
+  ('70000000-0000-0000-0000-0000000000f2', auth.uid(), '20000000-0000-0000-0000-0000000000a2', 'message', '{"needs_approval": true, "kind": "followup_1", "message_id": "30000000-0000-0000-0000-0000000000f1"}');
+select pg_temp.expect(review_batch(array['70000000-0000-0000-0000-0000000000f2']::uuid[], null) = 1, 'A approves a new follow-up after cancelling the first');
+select pg_temp.expect((select payload->>'needs_approval' from action_queue where id = '70000000-0000-0000-0000-0000000000f2') = 'false', 'follow-up ready to send');
+reset role;
+\echo ALL FOLLOWUP TESTS PASSED

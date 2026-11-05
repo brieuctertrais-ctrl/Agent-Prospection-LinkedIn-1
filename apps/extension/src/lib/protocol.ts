@@ -6,6 +6,8 @@ export type ContentRequest =
   | { type: "SCRAPE_PROFILE" }
   | { type: "SCRAPE_SEARCH_RESULTS" }
   | { type: "SEND_INVITATION"; note: string }
+  | { type: "SCRAPE_CONNECTIONS" }
+  | { type: "SEND_MESSAGE"; text: string }
   | { type: "CHECK_HEALTH" };
 
 export type SendCode =
@@ -27,7 +29,9 @@ export type ContentResponse =
   | { ok: true; type: "SEARCH_RESULTS"; urls: string[]; hasNextPage: boolean }
   | { ok: true; type: "INVITATION_SENT"; noteLimit?: number }
   | { ok: true; type: "HEALTH" }
-  | { ok: false; code: SendCode | "not_a_profile" | "unknown"; detail?: string };
+  | { ok: true; type: "CONNECTIONS"; urls: string[] }
+  | { ok: true; type: "MESSAGE_SENT" }
+  | { ok: false; code: SendCode | "not_a_profile" | "unknown" | string; detail?: string };
 
 /** Messages from the web app (externally_connectable) to the background worker. */
 export type ExternalRequest =

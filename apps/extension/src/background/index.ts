@@ -4,6 +4,7 @@ import { patchState } from "../lib/storage";
 import { WEB_APP_URL } from "../lib/config";
 
 import { ALARM, scheduleAlarm, tick } from "./sender";
+import { patchAuto } from "../lib/autostate";
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -17,6 +18,10 @@ chrome.alarms.onAlarm.addListener((a) => {
 chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
   if (msg?.type === "AUTOPILOT_TICK") {
     void scheduleAlarm().then(tick);
+  }
+  if (msg?.type === "CHECK_ACCEPTANCES") {
+    // Forces a connections check at the next step (still within working hours and the usual pacing).
+    void patchAuto({ lastAcceptCheck: 0, nextAt: undefined }).then(() => scheduleAlarm()).then(tick);
   }
 });
 

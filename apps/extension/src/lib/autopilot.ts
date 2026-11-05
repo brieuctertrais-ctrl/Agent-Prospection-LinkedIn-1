@@ -11,11 +11,12 @@
  *  - every action is logged (action_logs).
  */
 import type { Persona } from "@kairo/shared";
-import { ApiError, countToday, countWeek, generateMessage, logAction } from "./api";
+import { ApiError, countToday, countWeek, generateFollowup, generateMessage, logAction } from "./api";
 import { nextProfile, type Settings, type SkipEvent } from "./engine";
 import { patchState } from "./storage";
 import { supabase } from "./supabase";
 import { navigate, sendToTab } from "./tabs";
+import { CONNECTIONS_URL } from "../linkedin/messaging";
 import { sleep } from "../linkedin/dom";
 
 const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed"]);
@@ -28,14 +29,14 @@ async function userId(): Promise<string> {
 
 // ---------------------------------------------------------------- counts
 
-export async function batchCounts(): Promise<{ toReview: number; approved: number }> {
-  const base = () =>
-    supabase.from("action_queue").select("id", { count: "exact", head: true }).eq("status", "pending").eq("action_type", "invitation");
-  const [a, b] = await Promise.all([
-    base().eq("payload->>needs_approval", "true"),
+export async function batchCounts(): Promise<{ toReview: number; followups: number; approved: number }> {
+  const base = () => supabase.from("action_queue").select("id", { count: "exact", head: true }).eq("status", "pending");
+  const [a, f, b] = await Promise.all([
+    base().eq("action_type", "invitation").eq("payload->>needs_approval", "true"),
+    base().eq("action_type", "message").eq("payload->>needs_approval", "true"),
     base().eq("payload->>needs_approval", "false"),
   ]);
-  return { toReview: a.count ?? 0, approved: b.count ?? 0 };
+  return { toReview: a.count ?? 0, followups: f.count ?? 0, approved: b.count ?? 0 };
 }
 
 // ---------------------------------------------------------------- preparation
@@ -101,7 +102,7 @@ export async function prepareBatch(opts: {
 
 /** Result of one sending step. The background worker calls sendOne() repeatedly, spaced by a random delay. */
 export type StepResult =
-  | { kind: "sent"; noteLimit?: number }
+  | { kind: "sent"; action: "invitation" | "message"; noteLimit?: number }
   | { kind: "failed"; code: string; noteLimit?: number }
   /** LinkedIn warning / limit / check, or interface change: everything stops until the user resumes. */
   | { kind: "paused"; code: string }
@@ -158,23 +159,39 @@ export async function resumeCampaigns(): Promise<void> {
   await supabase.from("campaigns").update({ status: "draft", paused_reason: null }).eq("user_id", uid).eq("status", "paused");
 }
 
-/** Sends at most ONE approved invitation, after every safeguard check. */
+/** Sends at most ONE approved action (invitation or follow-up message), after every safeguard check. */
 export async function sendOne(tabId: number, settings: Settings, noteMax: number): Promise<StepResult> {
   if (!inWorkingHours(settings)) return { kind: "idle", reason: "outside_hours" };
-  const [day, week, cap] = await Promise.all([countToday("invitation"), countWeek("invitation"), dailyCap(settings)]);
-  if (day >= cap || week >= (settings.weekly_invitations ?? 100)) return { kind: "idle", reason: "quota" };
+  const [invDay, invWeek, cap, msgDay] = await Promise.all([
+    countToday("invitation"),
+    countWeek("invitation"),
+    dailyCap(settings),
+    countToday("message"),
+  ]);
+  const invitationsAllowed = invDay < cap && invWeek < (settings.weekly_invitations ?? 100);
+  const messagesAllowed = msgDay < (settings.daily_messages ?? 50);
+  const types = [...(messagesAllowed ? ["message"] : []), ...(invitationsAllowed ? ["invitation"] : [])];
+  if (!types.length) return { kind: "idle", reason: "quota" };
 
   const uid = await userId();
-  const { data: item } = await supabase
+  // Follow-ups first (people who just accepted), then invitations; oldest first.
+  const { data: rows } = await supabase
     .from("action_queue")
-    .select("id, prospect_id, campaign_id, payload, attempts, campaign:campaigns(status)")
+    .select("id, action_type, prospect_id, campaign_id, payload, attempts, campaign:campaigns(status)")
     .eq("status", "pending")
-    .eq("action_type", "invitation")
+    .in("action_type", types)
     .eq("payload->>needs_approval", "false")
     .order("scheduled_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+  const item = (rows ?? []).sort((a, b) => (a.action_type === b.action_type ? 0 : a.action_type === "message" ? -1 : 1))[0];
   if (!item) {
+    // Nothing allowed right now: quota reached for the remaining type, or nothing left at all.
+    const { count } = await supabase
+      .from("action_queue")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("payload->>needs_approval", "false");
+    if ((count ?? 0) > 0) return { kind: "idle", reason: "quota" };
     await supabase.from("campaigns").update({ status: "finished" }).eq("user_id", uid).eq("status", "running");
     return { kind: "idle", reason: "none" };
   }
@@ -190,6 +207,8 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
     if (error) return { kind: "failed", code: "campaign_conflict" };
   }
 
+  const isMessage = item.action_type === "message";
+  const action = isMessage ? "message" : "invitation";
   const messageId = (item.payload as { message_id?: string })?.message_id;
   const [{ data: prospect }, { data: message }] = await Promise.all([
     supabase.from("prospects").select("linkedin_url").eq("id", item.prospect_id).single(),
@@ -197,26 +216,30 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   ]);
   const fail = async (code: string) => {
     await supabase.from("action_queue").update({ status: "failed", error: code.slice(0, 200), attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
-    await logAction("invitation", "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
+    await logAction(action, "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
   };
   if (!prospect || !message) {
     await fail("missing_data");
     return { kind: "failed", code: "missing_data" };
   }
-  if ([...message.text].length > noteMax) {
+  if (!isMessage && [...message.text].length > noteMax) {
     await fail("note_too_long");
     return { kind: "failed", code: "note_too_long" };
   }
 
   await navigate(tabId, prospect.linkedin_url);
   await sleep(2500 + Math.random() * 2500);
-  const res = await sendToTab(tabId, { type: "SEND_INVITATION", note: message.text });
+  const res = await sendToTab(tabId, isMessage ? { type: "SEND_MESSAGE", text: message.text } : { type: "SEND_INVITATION", note: message.text });
 
-  if (res.ok && res.type === "INVITATION_SENT") {
+  if (res.ok && (res.type === "INVITATION_SENT" || res.type === "MESSAGE_SENT")) {
     await supabase.from("action_queue").update({ status: "done", attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
-    await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("prospect_id", item.prospect_id);
-    await logAction("invitation", "success", { autopilot: true, campaign_id: item.campaign_id }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
-    return { kind: "sent", noteLimit: res.noteLimit };
+    if (isMessage) {
+      await supabase.from("leads").update({ last_action: "followup_1_sent" }).eq("prospect_id", item.prospect_id);
+    } else {
+      await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("prospect_id", item.prospect_id);
+    }
+    await logAction(action, "success", { autopilot: true, campaign_id: item.campaign_id }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
+    return { kind: "sent", action, noteLimit: res.type === "INVITATION_SENT" ? res.noteLimit : undefined };
   }
   if (res.ok) return { kind: "failed", code: "unknown" };
 
@@ -230,4 +253,72 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   }
   const noteLimit = res.code === "note_too_long" ? Math.max(150, Math.min(300, Number(res.detail) || noteMax)) : undefined;
   return { kind: "failed", code: res.code, noteLimit };
+}
+
+// ---------------------------------------------------------------- acceptances & follow-ups
+
+export interface AcceptanceResult {
+  accepted: number;
+  proposed: number;
+  code?: string;
+}
+
+/**
+ * Reads the most recent connections, marks matching invited leads as accepted and prepares
+ * a follow-up message for each (to be reviewed in the dashboard — nothing is sent here).
+ */
+export async function checkAcceptances(tabId: number, maxProposals = 10): Promise<AcceptanceResult> {
+  await navigate(tabId, CONNECTIONS_URL);
+  await sleep(2500 + Math.random() * 2000);
+  const res = await sendToTab(tabId, { type: "SCRAPE_CONNECTIONS" });
+  if (!res.ok) {
+    if (PAUSE_CODES.has(res.code)) {
+      await patchState({ pausedReason: res.code });
+      await logAction("pause", "skipped", { code: res.code, autopilot: true, step: "acceptances" });
+    }
+    return { accepted: 0, proposed: 0, code: res.code };
+  }
+  if (res.type !== "CONNECTIONS") return { accepted: 0, proposed: 0, code: "unknown" };
+  await logAction("connections_check", "success", { found: res.urls.length });
+
+  const { data: accepted } = await supabase.rpc("mark_accepted", { urls: res.urls });
+  const ids = (accepted as string[] | null) ?? [];
+  const proposed = await proposeFollowups(maxProposals);
+  return { accepted: ids.length, proposed };
+}
+
+/** Prepares follow-up #1 for accepted leads that don't have one yet. */
+export async function proposeFollowups(max = 10): Promise<number> {
+  const uid = await userId();
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("prospect_id")
+    .eq("status", "accepted")
+    .order("accepted_at", { ascending: true })
+    .limit(50);
+  let proposed = 0;
+  for (const l of leads ?? []) {
+    if (proposed >= max) break;
+    const { count } = await supabase
+      .from("action_queue")
+      .select("id", { count: "exact", head: true })
+      .eq("prospect_id", l.prospect_id)
+      .eq("action_type", "message")
+      .eq("payload->>kind", "followup_1")
+      .in("status", ["pending", "done"]);
+    if ((count ?? 0) > 0) continue;
+    try {
+      const msg = await generateFollowup(l.prospect_id);
+      const { error } = await supabase.from("action_queue").insert({
+        user_id: uid,
+        prospect_id: l.prospect_id,
+        action_type: "message",
+        payload: { needs_approval: true, kind: "followup_1", message_id: msg.message_id },
+      });
+      if (!error) proposed += 1;
+    } catch (e) {
+      if (e instanceof ApiError && e.message !== "generic") break; // quota / session: stop for now
+    }
+  }
+  return proposed;
 }

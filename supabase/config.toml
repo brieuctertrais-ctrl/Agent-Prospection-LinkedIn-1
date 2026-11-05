@@ -50,3 +50,8 @@ import_map = "./functions/generate-message/deno.json"
 verify_jwt = true
 entrypoint = "./functions/score-profile/index.ts"
 import_map = "./functions/score-profile/deno.json"
+
+[functions.generate-followup]
+verify_jwt = true
+entrypoint = "./functions/generate-followup/index.ts"
+import_map = "./functions/generate-followup/deno.json"

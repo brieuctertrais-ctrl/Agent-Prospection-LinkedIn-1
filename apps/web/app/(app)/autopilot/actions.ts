@@ -22,7 +22,7 @@ export async function reviewBatch(approve: string[], reject: string[]) {
   return {};
 }
 
-const EditSchema = z.object({ queueId: z.string().uuid(), text: z.string().trim().min(10).max(300) });
+const EditSchema = z.object({ queueId: z.string().uuid(), text: z.string().trim().min(10).max(1000) });
 
 /** Edit the message of an item that is still pending (owner only). */
 export async function updateQueuedMessage(queueId: string, text: string) {
@@ -31,12 +31,14 @@ export async function updateQueuedMessage(queueId: string, text: string) {
   const { supabase, user } = await requireUser();
   const { data: item } = await supabase
     .from("action_queue")
-    .select("payload, status")
+    .select("payload, status, action_type")
     .eq("id", parsed.data.queueId)
     .eq("user_id", user.id)
     .maybeSingle();
   const messageId = (item?.payload as { message_id?: string } | null)?.message_id;
   if (!item || item.status !== "pending" || !messageId) return { error: "not_found" as const };
+  // Invitation notes are capped at 300 characters (LinkedIn), follow-up messages at 1000.
+  if (item.action_type !== "message" && [...parsed.data.text].length > 300) return { error: "invalid_request" as const };
   const { error } = await supabase
     .from("messages")
     .update({ text: parsed.data.text, edited: true })
@@ -95,12 +97,30 @@ export async function regenerateMessages(queueIds: string[]) {
   for (const id of ids.data) {
     const { data: item } = await supabase
       .from("action_queue")
-      .select("id, status, payload, prospect_id, campaign:campaigns(persona_id)")
+      .select("id, status, action_type, payload, prospect_id, campaign:campaigns(persona_id)")
       .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
     const campaign = (Array.isArray(item?.campaign) ? item?.campaign[0] : item?.campaign) as { persona_id?: string } | null;
-    if (!item || item.status !== "pending" || !item.prospect_id || !campaign?.persona_id) continue;
+    if (!item || item.status !== "pending" || !item.prospect_id) continue;
+
+    if (item.action_type === "message") {
+      // Follow-up message: rewritten from the stored profile by the generate-followup function.
+      const { data: gen, error } = await supabase.functions.invoke<{ message_id: string }>("generate-followup", {
+        body: { prospect_id: item.prospect_id },
+      });
+      if (error || !gen?.message_id) {
+        const code = (error as { context?: { status?: number } } | null)?.context?.status;
+        if (code === 429 || code === 402) return { error: "quota" as const, done };
+        console.error(JSON.stringify({ where: "regenerate_followup", status: code ?? null }));
+        continue;
+      }
+      const payload = { ...((item.payload as Record<string, unknown>) ?? {}), message_id: gen.message_id };
+      const { error: upErr } = await supabase.from("action_queue").update({ payload }).eq("id", id).eq("user_id", user.id).eq("status", "pending");
+      if (!upErr) done += 1;
+      continue;
+    }
+    if (!campaign?.persona_id) continue;
 
     const { data: p } = await supabase
       .from("prospects")

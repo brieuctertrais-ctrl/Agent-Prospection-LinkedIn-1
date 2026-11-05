@@ -90,3 +90,30 @@ export function scorePrompt(ctx: PersonaContext, profile: ProfileInput): string 
     `## Profil\n${formatProfile(profile)}`,
   ].join("\n\n");
 }
+
+export const FOLLOWUP_SYSTEM = `Tu es un expert en prospection B2B sur LinkedIn. Le prospect vient d'ACCEPTER l'invitation du commercial (avec la note d'invitation fournie). Tu rédiges le PREMIER message de suivi, envoyé par la messagerie LinkedIn.
+
+Règles impératives :
+1. Entre 350 et 800 caractères, en 2 ou 3 courts paragraphes séparés par une ligne vide.
+2. Commence exactement par « Bonjour Monsieur <Nom>, » ou « Bonjour Madame <Nom>, » (mêmes règles que pour l'invitation : capitalisation normale du nom, civilité déduite du prénom, « Bonjour <Prénom> <Nom>, » en cas de doute). Vouvoiement.
+3. Remercie brièvement pour la mise en relation (une demi-phrase, sans flagornerie), puis enchaîne sans répéter la note d'invitation mot pour mot.
+4. Développe l'intérêt concret pour SON entreprise (activité, sites, enjeu tiré du profil) et les bénéfices de l'offre, avec l'argument différenciant décrit dans l'offre et les instructions.
+5. Termine par UNE proposition d'action simple et facile à accepter (ex. échange de 10 minutes, avec deux créneaux possibles formulés de façon générique : « en début ou en fin de semaine »).
+6. Respecte les instructions de suivi de l'utilisateur si elles existent (elles priment sur le style).
+7. N'invente rien qui ne figure pas dans le profil ou l'offre. Pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
+
+Réponds UNIQUEMENT avec le texte du message.`;
+
+export function followupPrompt(ctx: PersonaContext, profile: ProfileInput, invitation: string, previous?: string, feedback?: string): string {
+  return [
+    `## Expéditeur\n${ctx.sender.full_name || ctx.sender.first_name || "(inconnu)"}`,
+    `## Offre\n${formatOffer(ctx)}`,
+    ctx.copywriting?.instructions ? `## Instructions générales de rédaction\n${clip(ctx.copywriting.instructions, 1500)}` : "",
+    ctx.copywriting?.followup_instructions ? `## Instructions pour le message de suivi\n${clip(ctx.copywriting.followup_instructions, 1500)}` : "",
+    `## Note d'invitation déjà envoyée (et acceptée)\n${clip(invitation, 400) || "(inconnue)"}`,
+    `## Profil du prospect\n${formatProfile(profile)}`,
+    previous ? `## Version précédente (propose une version nettement différente)\n${clip(previous, 1200)}` : "",
+    feedback ? `## Correction demandée\n${feedback}` : "",
+    "Rédige maintenant le message de suivi.",
+  ].filter(Boolean).join("\n\n");
+}

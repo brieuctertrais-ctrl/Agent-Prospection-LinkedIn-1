@@ -11,6 +11,7 @@ export interface Settings {
   daily_profile_views: number;
   daily_invitations: number;
   weekly_invitations: number;
+  daily_messages?: number;
   min_match_score: number;
   min_delay_seconds?: number;
   max_delay_seconds?: number;

@@ -57,7 +57,7 @@ export interface PersonaContext {
     formal_address: boolean;
   };
   pitch: { title: string; description: string; benefits: string } | null;
-  copywriting: { template: string; instructions: string } | null;
+  copywriting: { template: string; instructions: string; followup_instructions?: string } | null;
   knowledge: { title: string; content: string }[];
   sender: { first_name: string | null; full_name: string | null; locale: string };
 }
@@ -67,7 +67,7 @@ export async function loadPersonaContext(supabase: SupabaseClient, userId: strin
   const [persona, pitch, copy, knowledge, profile] = await Promise.all([
     supabase.from("personas").select("*").eq("id", personaId).eq("user_id", userId).maybeSingle(),
     supabase.from("pitches").select("title, description, benefits").eq("persona_id", personaId).maybeSingle(),
-    supabase.from("copywriting_settings").select("template, instructions").eq("persona_id", personaId).maybeSingle(),
+    supabase.from("copywriting_settings").select("template, instructions, followup_instructions").eq("persona_id", personaId).maybeSingle(),
     supabase.from("knowledge_docs").select("title, content").eq("user_id", userId).order("updated_at", { ascending: false }).limit(10),
     supabase.from("profiles").select("first_name, full_name, locale").eq("id", userId).single(),
   ]);

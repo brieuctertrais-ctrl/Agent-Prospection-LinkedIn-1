@@ -28,7 +28,7 @@ export function AutopilotPanel({
   onNoteMax: (n: number) => void;
   t: T;
 }) {
-  const [counts, setCounts] = useState({ toReview: 0, approved: 0 });
+  const [counts, setCounts] = useState({ toReview: 0, followups: 0, approved: 0 });
   const [size, setSize] = useState(10);
   const [running, setRunning] = useState<"idle" | "preparing" | "sending">("idle");
   const [status, setStatus] = useState<string>();
@@ -150,6 +150,15 @@ export function AutopilotPanel({
     if (a.enabled && a.nextAt && a.nextAt > Date.now()) {
       parts.push(t("ap.auto.next", { time: new Date(a.nextAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) }));
     }
+    if (a.day === new Date().toISOString().slice(0, 10) && (a.messagesToday ?? 0) > 0) parts.push(t("ap.auto.messages", { n: a.messagesToday ?? 0 }));
+    if (a.lastAcceptCheck) {
+      parts.push(
+        t("ap.auto.lastCheck", {
+          time: new Date(a.lastAcceptCheck).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          accepted: a.lastAccepted ?? 0,
+        }),
+      );
+    }
     if (a.enabled && !inWorkingHours(settings)) parts.push(t("ap.auto.outside", { start: settings.work_start_hour ?? 9, end: settings.work_end_hour ?? 19 }));
     return parts.join(" ");
   };
@@ -194,6 +203,7 @@ export function AutopilotPanel({
           <section className="space-y-2 rounded-2xl bg-navy-light p-4">
             <p className="font-semibold">{t("ap.step2")}</p>
             <p className="text-sm text-slate-300">{t("ap.toReview", { n: counts.toReview })}</p>
+            {counts.followups > 0 && <p className="text-sm font-semibold text-gold">{t("ap.followups", { n: counts.followups })}</p>}
             <GhostButton className="w-full" onClick={() => chrome.tabs.create({ url: `${WEB_APP_URL}/autopilot` })}>
               {t("ap.openReview")} <ExternalLink className="h-4 w-4" />
             </GhostButton>
@@ -215,6 +225,14 @@ export function AutopilotPanel({
                 <p className="mb-1 font-semibold">{auto.enabled ? t("ap.auto.on") : t("ap.auto.off")}</p>
                 <p>{autoLine(auto)}</p>
               </div>
+            )}
+            {auto?.enabled && (
+              <>
+                <GhostButton className="w-full" onClick={() => void chrome.runtime.sendMessage({ type: "CHECK_ACCEPTANCES" }).catch(() => undefined)}>
+                  <RefreshCw className="h-4 w-4" /> {t("ap.checkAccept")}
+                </GhostButton>
+                <p className="text-center text-[11px] text-slate-500">{t("ap.checkAcceptHelp")}</p>
+              </>
             )}
             {auto?.enabled ? (
               <GhostButton className="w-full" onClick={() => toggleAuto(false)}>

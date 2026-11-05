@@ -4,7 +4,7 @@
  * as long as Chrome is open. All safeguards are in sendOne() (hours, quotas, warm-up, LinkedIn warnings).
  */
 import { translate, type Locale, type MessageKey } from "@kairo/shared";
-import { nextDelaySeconds, sendOne } from "../lib/autopilot";
+import { checkAcceptances, inWorkingHours, nextDelaySeconds, sendOne } from "../lib/autopilot";
 import type { Settings } from "../lib/engine";
 import { getAuto, patchAuto } from "../lib/autostate";
 import { getState, patchState, today } from "../lib/storage";
@@ -13,6 +13,7 @@ import { sleep } from "../linkedin/dom";
 
 export const ALARM = "efi-autopilot";
 const STEP_LOCK_MS = 4 * 60_000;
+const ACCEPT_CHECK_EVERY_MS = 3 * 60 * 60_000; // connections page read every 3 h during working hours
 
 /** Creates the 1-minute alarm only if it does not exist yet (re-creating it would reset its timer). */
 export async function scheduleAlarm(): Promise<void> {
@@ -70,7 +71,7 @@ export async function tick(): Promise<void> {
   const state = await getState();
   if (state.pausedReason) return; // stopped after a LinkedIn warning: only the user can resume
 
-  if (auto.day !== today()) auto = await patchAuto({ day: today(), sentToday: 0, failedToday: 0, notified: undefined });
+  if (auto.day !== today()) auto = await patchAuto({ day: today(), sentToday: 0, failedToday: 0, messagesToday: 0, notified: undefined });
   await patchAuto({ lockUntil: now + STEP_LOCK_MS });
 
   try {
@@ -80,14 +81,35 @@ export async function tick(): Promise<void> {
       return;
     }
     const tabId = await workTab();
+
+    // Every 3 h during working hours: detect accepted invitations and prepare follow-ups.
+    if (inWorkingHours(settings) && (!auto.lastAcceptCheck || now - auto.lastAcceptCheck > ACCEPT_CHECK_EVERY_MS)) {
+      const a = await checkAcceptances(tabId);
+      await patchAuto({
+        lastAcceptCheck: Date.now(),
+        lastAccepted: a.accepted,
+        lastProposed: a.proposed,
+        nextAt: Date.now() + nextDelaySeconds(settings) * 1000,
+      });
+      if (a.code && ["security_check", "limit_reached", "ui_changed"].includes(a.code)) {
+        await patchAuto({ enabled: false, last: "paused", lastCode: a.code, lastAt: Date.now() });
+        await notify("paused", "bg.paused", { reason: translate("fr", `send.${a.code}` as MessageKey) });
+      } else if (a.accepted > 0 || a.proposed > 0) {
+        await notify("accepted", "bg.accepted", { accepted: a.accepted, proposed: a.proposed });
+      }
+      return;
+    }
+
     const r = await sendOne(tabId, settings, state.noteMaxChars ?? 300);
 
     if (r.kind === "sent" || r.kind === "failed") {
       if (r.noteLimit) await patchState({ noteMaxChars: r.noteLimit });
-      const sent = auto.sentToday + (r.kind === "sent" ? 1 : 0);
+      const sent = auto.sentToday + (r.kind === "sent" && r.action === "invitation" ? 1 : 0);
+      const messages = (auto.messagesToday ?? 0) + (r.kind === "sent" && r.action === "message" ? 1 : 0);
       const failed = auto.failedToday + (r.kind === "failed" ? 1 : 0);
       await patchAuto({
         sentToday: sent,
+        messagesToday: messages,
         failedToday: failed,
         lastAt: Date.now(),
         last: r.kind,

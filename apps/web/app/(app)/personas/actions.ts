@@ -21,6 +21,7 @@ const schema = z.object({
   pitch_benefits: z.string().max(3000),
   copy_template: z.string().max(2000),
   copy_instructions: z.string().max(2000),
+  copy_followup: z.string().max(2000),
 });
 
 export type SaveState = { error?: string; fields?: string[] };
@@ -50,6 +51,7 @@ export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveS
     pitch_benefits: String(fd.get("pitch_benefits") ?? ""),
     copy_template: String(fd.get("copy_template") ?? ""),
     copy_instructions: String(fd.get("copy_instructions") ?? ""),
+    copy_followup: String(fd.get("copy_followup") ?? ""),
   });
   if (!parsed.success) return { error: "invalid_request", fields: parsed.error.issues.map((i) => String(i.path[0])) };
   const v = parsed.data;
@@ -98,6 +100,7 @@ export async function savePersona(_prev: SaveState, fd: FormData): Promise<SaveS
       user_id: user.id,
       template: v.copy_template,
       instructions: v.copy_instructions,
+      followup_instructions: v.copy_followup,
     }),
   ]);
   if (p.error || c.error) return logAndFail("pitch_copy_upsert", (p.error ?? c.error)!.code);

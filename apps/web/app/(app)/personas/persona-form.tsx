@@ -21,7 +21,7 @@ export interface PersonaFormValues {
   keywords: string[];
   formal_address: boolean;
   pitch: { title: string; description: string; benefits: string };
-  copy: { template: string; instructions: string };
+  copy: { template: string; instructions: string; followup: string };
 }
 
 export function PersonaForm({ values, locale }: { values: PersonaFormValues; locale: Locale }) {
@@ -94,6 +94,10 @@ export function PersonaForm({ values, locale }: { values: PersonaFormValues; loc
               <div>
                 <Label htmlFor="copy_instructions">{t("copy.instructions")}</Label>
                 <Textarea id="copy_instructions" name="copy_instructions" defaultValue={values.copy.instructions} placeholder={t("copy.instructionsPh")} />
+              </div>
+              <div>
+                <Label htmlFor="copy_followup">{t("copy.followup")}</Label>
+                <Textarea id="copy_followup" name="copy_followup" defaultValue={values.copy.followup} placeholder={t("copy.followupPh")} />
               </div>
             </div>
           </Card>

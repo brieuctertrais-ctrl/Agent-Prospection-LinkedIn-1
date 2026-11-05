@@ -12,8 +12,8 @@ export default async function AutopilotPage() {
   const [{ data: rows }, { data: campaigns }] = await Promise.all([
     supabase
       .from("action_queue")
-      .select("id, status, payload, error, updated_at, prospect:prospects(full_name, headline, company, location, linkedin_url, photo_url, score, score_reason)")
-      .eq("action_type", "invitation")
+      .select("id, action_type, status, payload, error, updated_at, prospect:prospects(full_name, headline, company, location, linkedin_url, photo_url, score, score_reason)")
+      .in("action_type", ["invitation", "message"])
       .order("created_at", { ascending: false })
       .limit(300),
     supabase.from("campaigns").select("id, status, paused_reason").in("status", ["running", "paused"]).order("updated_at", { ascending: false }).limit(1),
@@ -32,6 +32,7 @@ export default async function AutopilotPage() {
     const payload = (r.payload ?? {}) as { message_id?: string; needs_approval?: boolean };
     return {
       id: r.id,
+      kind: r.action_type === "message" ? ("message" as const) : ("invitation" as const),
       status: r.status,
       needsApproval: payload.needs_approval === true,
       error: r.error,
@@ -46,7 +47,8 @@ export default async function AutopilotPage() {
     };
   });
 
-  const toReview = items.filter((i) => i.status === "pending" && i.needsApproval);
+  const toReview = items.filter((i) => i.status === "pending" && i.needsApproval && i.kind === "invitation");
+  const followups = items.filter((i) => i.status === "pending" && i.needsApproval && i.kind === "message");
   const approved = items.filter((i) => i.status === "pending" && !i.needsApproval);
   const done = items.filter((i) => i.status === "done");
   const failed = items.filter((i) => i.status === "failed");
@@ -63,6 +65,8 @@ export default async function AutopilotPage() {
     regenerate: t("apw.regenerate"),
     regenerating: t("apw.regenerating"),
     quota: t("err.quota_exceeded"),
+    kindInvitation: t("apw.kind.invitation"),
+    kindMessage: t("apw.kind.message"),
   };
 
   return (
@@ -81,6 +85,14 @@ export default async function AutopilotPage() {
           </p>
           {campaign.status === "running" && <PauseButton campaignId={campaign.id} label={t("apw.pause")} />}
         </Card>
+      )}
+
+      {followups.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">{t("apw.followups")} ({followups.length})</h2>
+          <p className="text-sm text-slate-400">{t("apw.followupsHelp")}</p>
+          <ReviewList items={followups} mode="review" labels={labels} />
+        </section>
       )}
 
       <section className="space-y-3">

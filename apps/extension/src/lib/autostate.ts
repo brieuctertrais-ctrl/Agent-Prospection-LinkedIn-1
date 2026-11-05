@@ -11,6 +11,12 @@ export interface AutoState {
   day?: string;
   sentToday: number;
   failedToday: number;
+  /** Follow-up messages sent today. */
+  messagesToday?: number;
+  /** Last check of the connections page (ms). */
+  lastAcceptCheck?: number;
+  lastAccepted?: number;
+  lastProposed?: number;
   lastAt?: number;
   /** Last outcome, as an i18n key suffix (sent, failed, outside_hours, quota, none, paused, paused_by_user). */
   last?: string;

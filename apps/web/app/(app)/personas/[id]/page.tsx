@@ -12,7 +12,7 @@ const EMPTY: PersonaFormValues = {
   keywords: [],
   formal_address: true,
   pitch: { title: "", description: "", benefits: "" },
-  copy: { template: "", instructions: "" },
+  copy: { template: "", instructions: "", followup: "" },
 };
 
 export default async function PersonaEditPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +31,11 @@ export default async function PersonaEditPage({ params }: { params: Promise<{ id
     values = {
       ...persona.data,
       pitch: { title: pitch.data?.title ?? "", description: pitch.data?.description ?? "", benefits: pitch.data?.benefits ?? "" },
-      copy: { template: copy.data?.template ?? "", instructions: copy.data?.instructions ?? "" },
+      copy: {
+        template: copy.data?.template ?? "",
+        instructions: copy.data?.instructions ?? "",
+        followup: copy.data?.followup_instructions ?? "",
+      },
     };
   }
 

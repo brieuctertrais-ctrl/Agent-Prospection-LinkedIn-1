@@ -6,6 +6,7 @@ import { cancelQueueItem, regenerateMessages, reviewBatch, updateQueuedMessage }
 
 export interface QueueItem {
   id: string;
+  kind: "invitation" | "message";
   status: string;
   needsApproval: boolean;
   error: string | null;
@@ -19,7 +20,10 @@ export interface QueueItem {
   score: number | null;
 }
 
-type Labels = Record<"selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota", string>;
+type Labels = Record<
+  "selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota" | "kindInvitation" | "kindMessage",
+  string
+>;
 
 export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: "review" | "approved" | "readonly"; labels: Labels }) {
   const [selected, setSelected] = useState<string[]>(mode === "review" ? items.map((i) => i.id) : []);
@@ -113,6 +117,7 @@ function Row({
   const [saved, setSaved] = useState(false);
   const editable = mode !== "readonly";
   const chars = [...text].length;
+  const max = item.kind === "message" ? 1000 : 300;
 
   return (
     <div className="flex gap-4 rounded-2xl border border-white/5 bg-navy-light p-4">
@@ -137,25 +142,26 @@ function Row({
         </div>
         <p className="mt-2 line-clamp-2 text-xs text-slate-300">{item.headline}</p>
         <p className="text-xs text-slate-400">{[item.company, item.location].filter(Boolean).join(" · ")}</p>
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{item.kind === "message" ? labels.kindMessage : labels.kindInvitation}</p>
         {item.error && <p className="mt-1 text-xs text-red-300">{item.error}</p>}
       </div>
       <div className="flex-1 space-y-2">
         {editable ? (
           <textarea
             value={text}
-            maxLength={300}
+            maxLength={max}
             onChange={(e) => {
               setText(e.target.value);
               setSaved(false);
             }}
-            className="min-h-[110px] w-full rounded-lg bg-cream p-3 text-sm text-navy outline-none focus:ring-2 focus:ring-gold"
+            className={`${item.kind === "message" ? "min-h-[200px]" : "min-h-[110px]"} w-full rounded-lg bg-cream p-3 text-sm text-navy outline-none focus:ring-2 focus:ring-gold`}
           />
         ) : (
           <p className="whitespace-pre-line rounded-lg bg-cream p-3 text-sm text-navy">{text}</p>
         )}
         {editable && (
           <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs ${chars > 300 ? "text-red-300" : "text-slate-400"}`}>{chars}/300</span>
+            <span className={`text-xs ${chars > max ? "text-red-300" : "text-slate-400"}`}>{chars}/{max}</span>
             <div className="flex gap-2">
               {text !== item.message && !saved && (
                 <Button

@@ -91,3 +91,30 @@ test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another 
     await browser.close();
   }
 });
+
+test("follow-up message: sent to a 1st-degree connection, never to a 2nd-degree one", { timeout: 60000 }, async () => {
+  const first = readFileSync(new URL("./profile-1st.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/in/vincent-besson/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: first }));
+    await page.goto("https://www.linkedin.com/in/vincent-besson/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    const text = "Bonjour Monsieur Besson, merci pour la mise en relation. Un échange de 10 minutes ?";
+    const res = await page.evaluate((t) => window.kairo.sendMessage(t), text);
+    assert.deepEqual(res, { ok: true });
+    assert.equal((await page.evaluate(() => window.__sent)).trim(), text);
+
+    // Same page as a 2nd-degree profile: must refuse (no InMail) and click nothing.
+    await page.evaluate(() => {
+      document.querySelector("section span").textContent = " · 2e";
+      window.__sent = undefined;
+    });
+    const refused = await page.evaluate((t) => window.kairo.sendMessage(t), text);
+    assert.deepEqual(refused, { ok: false, code: "not_connected" });
+    assert.equal(await page.evaluate(() => window.__sent), undefined);
+  } finally {
+    await browser.close();
+  }
+});
