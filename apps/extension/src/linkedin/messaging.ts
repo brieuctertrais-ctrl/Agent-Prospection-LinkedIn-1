@@ -35,8 +35,9 @@ export async function scrapeConnections(max = 120, target = 40): Promise<string[
   let count = collect(max).length;
   for (let round = 0; round < 12 && count < target && stable < 3; round++) {
     const links = connectionLinks();
-    links[links.length - 1]?.scrollIntoView({ behavior: "smooth", block: "end" });
-    window.scrollBy({ top: 600, behavior: "smooth" });
+    // Instant scrolling: smooth scrolling does not run in a background tab.
+    links[links.length - 1]?.scrollIntoView({ behavior: "auto", block: "end" });
+    window.scrollBy({ top: 600, behavior: "auto" });
     await sleep(900 + Math.random() * 700);
     const more = deepQueryAll<HTMLElement>("button").find(
       (b) => isReallyVisible(b) && /^(afficher plus|voir plus|show more)/i.test(text(b)) && !b.closest("nav, header, aside"),

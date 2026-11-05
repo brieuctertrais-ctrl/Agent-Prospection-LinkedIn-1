@@ -13,7 +13,10 @@ import { sleep } from "../linkedin/dom";
 
 export const ALARM = "efi-autopilot";
 const STEP_LOCK_MS = 4 * 60_000;
-const ACCEPT_CHECK_EVERY_MS = 3 * 60 * 60_000; // connections page read every 3 h during working hours
+// Connections page read every hour during working hours. In a background tab LinkedIn only renders
+// the ~10 most recent connections (lazy loading is paused while the tab is hidden): checking hourly
+// keeps that window large enough (more than 10 new connections in one hour is very unlikely).
+const ACCEPT_CHECK_EVERY_MS = 60 * 60_000;
 
 /** Creates the 1-minute alarm only if it does not exist yet (re-creating it would reset its timer). */
 export async function scheduleAlarm(): Promise<void> {
