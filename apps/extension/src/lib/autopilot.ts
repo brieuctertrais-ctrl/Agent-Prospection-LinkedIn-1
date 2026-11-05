@@ -12,7 +12,7 @@
  */
 import type { Persona } from "@kairo/shared";
 import { ApiError, countToday, countWeek, generateMessage, logAction } from "./api";
-import { nextProfile, type Settings } from "./engine";
+import { nextProfile, type Settings, type SkipEvent } from "./engine";
 import { patchState } from "./storage";
 import { supabase } from "./supabase";
 import { navigate, sendToTab } from "./tabs";
@@ -49,6 +49,7 @@ export async function prepareBatch(opts: {
   size: number;
   noteMax: number;
   onProgress: (prepared: number) => void;
+  onSkip?: (e: SkipEvent) => void;
   shouldStop: () => boolean;
 }): Promise<{ prepared: number; end: PrepareEnd; code?: string; lowScore?: number }> {
   const uid = await userId();
@@ -64,7 +65,7 @@ export async function prepareBatch(opts: {
   let lowScore = 0;
   while (prepared < opts.size) {
     if (opts.shouldStop()) return { prepared, end: "stopped" };
-    const r = await nextProfile(opts.tabId, opts.persona, opts.settings);
+    const r = await nextProfile(opts.tabId, opts.persona, opts.settings, opts.onSkip);
     if (r.kind === "low_match") {
       // Keep looking, but not forever: 3 rounds of 15 set-aside profiles → let the user adjust the persona.
       lowScore += r.skipped.lowScore;

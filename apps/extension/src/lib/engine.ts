@@ -144,7 +144,15 @@ async function popUrl(personaId: string): Promise<string | undefined> {
  * Finds and opens the next recommended profile for the persona, at a human pace.
  * Profiles below the match score are skipped (and never proposed again).
  */
-export async function nextProfile(tabId: number, persona: Persona, settings: Settings): Promise<NextResult> {
+/** Live feedback while searching: each profile set aside, with its score when known. */
+export type SkipEvent = { reason: "low_score" | "connected" | "unreadable"; score?: number };
+
+export async function nextProfile(
+  tabId: number,
+  persona: Persona,
+  settings: Settings,
+  onSkip?: (e: SkipEvent) => void,
+): Promise<NextResult> {
   const skipped: SkipCounts = { lowScore: 0, connected: 0, unreadable: 0 };
   for (let skips = 0; skips < MAX_AUTO_SKIPS; skips++) {
     const views = await countToday("profile_view");
@@ -163,10 +171,12 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
       if (PAUSE_CODES.has(res.code)) return pause(res.code, res.detail);
       await logAction("profile_view", "failure", { code: res.code, detail: res.detail }, { linkedin_url: url });
       skipped.unreadable += 1;
+      onSkip?.({ reason: "unreadable" });
       continue;
     }
     if (res.type !== "PROFILE") {
       skipped.unreadable += 1;
+      onSkip?.({ reason: "unreadable" });
       continue;
     }
     const profile = res.profile;
@@ -178,6 +188,7 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
         await supabase.from("exclusion_list").upsert({ user_id: auth.user.id, linkedin_url: profile.linkedin_url, reason: profile.connection_state });
       }
       skipped.connected += 1;
+      onSkip?.({ reason: "connected" });
       continue;
     }
 
@@ -188,6 +199,7 @@ export async function nextProfile(tabId: number, persona: Persona, settings: Set
           await recordLowScore(persona.id, s.prospect_id);
           await logAction("score", "skipped", { score: s.score, reason: s.reason }, { prospect_id: s.prospect_id, linkedin_url: profile.linkedin_url });
           skipped.lowScore += 1;
+          onSkip?.({ reason: "low_score", score: s.score });
           continue;
         }
         return { kind: "profile", profile, prospectId: s.prospect_id, score: s.score, reason: s.reason };

@@ -83,13 +83,29 @@ export function AutopilotPanel({
     withTab(async (tabId) => {
       setRunning("preparing");
       setStatus(t("ap.preparing", { n: 0, size }));
+      const stats = { prepared: 0, low: 0, connected: 0, last: undefined as number | undefined };
+      const show = () =>
+        setStatus(
+          `${t("ap.preparing", { n: stats.prepared, size })} ${t("ap.stats", { low: stats.low, connected: stats.connected })}` +
+            (stats.last !== undefined ? ` ${t("ap.lastScore", { score: stats.last, min: settings.min_match_score })}` : ""),
+        );
       const r = await prepareBatch({
         tabId,
         persona: (await fetchPersona(persona.id)) ?? persona,
         settings,
         size,
         noteMax,
-        onProgress: (n) => setStatus(t("ap.preparing", { n, size })),
+        onProgress: (n) => {
+          stats.prepared = n;
+          show();
+        },
+        onSkip: (e) => {
+          if (e.reason === "low_score") {
+            stats.low += 1;
+            stats.last = e.score;
+          } else if (e.reason === "connected") stats.connected += 1;
+          show();
+        },
         shouldStop: () => stop.current,
       });
       const key: Record<PrepareEnd, string> = {
