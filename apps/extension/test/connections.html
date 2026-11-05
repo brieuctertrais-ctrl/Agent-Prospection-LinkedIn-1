@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Relations | LinkedIn</title></head><body style="margin:0">
+<nav><a href="https://www.linkedin.com/in/me/">Moi</a></nav>
+<main><div id="scroller" style="height:400px;overflow:auto"><ul id="list"></ul></div></main>
+<script>
+  let n = 0; const list = document.getElementById('list');
+  const add = (k) => { for (let i = 0; i < k; i++) { n++; const li = document.createElement('li'); li.style.height = '80px';
+    li.innerHTML = '<a href="https://www.linkedin.com/in/person-' + n + '/">Personne ' + n + '</a>'; list.appendChild(li); } };
+  add(10);
+  // Lazy-load 10 more when the last item becomes visible (like LinkedIn), up to 60.
+  new IntersectionObserver((entries) => { if (entries.some(e => e.isIntersecting) && n < 60) add(10); observe(); }, { root: document.getElementById('scroller') });
+  function observe() {}
+  setInterval(() => { const last = list.lastElementChild; const r = last.getBoundingClientRect(); const s = document.getElementById('scroller').getBoundingClientRect();
+    if (r.top < s.bottom && n < 60 && !window.__busy) { window.__busy = true; setTimeout(() => { add(10); window.__busy = false; }, 300); } }, 200);
+</script>
+</body></html>

@@ -118,3 +118,20 @@ test("follow-up message: sent to a 1st-degree connection, never to a 2nd-degree 
     await browser.close();
   }
 });
+
+test("connections page: lazy-loaded list in an inner scroll container is read up to ~40", { timeout: 60000 }, async () => {
+  const html = readFileSync(new URL("./connections.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/mynetwork/invite-connect/connections/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: html }));
+    await page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    const urls = await page.evaluate(() => window.kairo.scrapeConnections());
+    assert.ok(urls.length >= 40, `read ${urls.length}`);
+    assert.ok(!urls.includes("https://www.linkedin.com/in/me/"), "navigation link ignored");
+  } finally {
+    await browser.close();
+  }
+});

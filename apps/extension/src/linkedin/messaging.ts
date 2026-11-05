@@ -10,26 +10,46 @@ import { detectAccountWarning } from "./invite";
 export const CONNECTIONS_URL = "https://www.linkedin.com/mynetwork/invite-connect/connections/";
 
 /** Profile URLs of the most recent connections (the page lists newest first). */
-export async function scrapeConnections(max = 120): Promise<string[]> {
-  // LinkedIn shows ~10 connections first: scroll and click "Show more results" a few times (~40 in total).
-  for (let round = 0; round < 4; round++) {
-    for (let i = 0; i < 4; i++) {
-      window.scrollBy({ top: 900, behavior: "smooth" });
-      await sleep(500 + Math.random() * 400);
-    }
-    const more = deepButton(document, ["Afficher plus de résultats", "Show more results", "Voir plus", "Show more"]);
-    if (!more) break;
-    more.click();
-    await sleep(1500 + Math.random() * 1000);
-  }
+function connectionLinks(): HTMLAnchorElement[] {
+  return Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']")).filter(
+    (a) => !a.closest("nav, header, aside, footer, [role='navigation'], [role='banner']") && !/\/in\/acoa/i.test(a.href),
+  );
+}
+
+function collect(max: number): string[] {
   const urls = new Set<string>();
-  for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']"))) {
-    if (a.closest("nav, header, aside, footer, [role='navigation'], [role='banner']")) continue;
+  for (const a of connectionLinks()) {
     const u = normalizeProfileUrl(a.href);
-    if (u && !/\/in\/acoa/i.test(u)) urls.add(u);
+    if (u) urls.add(u);
     if (urls.size >= max) break;
   }
   return [...urls];
+}
+
+/** Profile URLs of the most recent connections (the page lists newest first). */
+export async function scrapeConnections(max = 120, target = 40): Promise<string[]> {
+  // LinkedIn first renders ~10 connections and lazy-loads the rest when the end of the list is
+  // reached — in the window or in an inner scroll container. Bring the last card into view
+  // (works for both), click "Show more" when present, until ~40 or nothing new loads.
+  let stable = 0;
+  let count = collect(max).length;
+  for (let round = 0; round < 12 && count < target && stable < 3; round++) {
+    const links = connectionLinks();
+    links[links.length - 1]?.scrollIntoView({ behavior: "smooth", block: "end" });
+    window.scrollBy({ top: 600, behavior: "smooth" });
+    await sleep(900 + Math.random() * 700);
+    const more = deepQueryAll<HTMLElement>("button").find(
+      (b) => isReallyVisible(b) && /^(afficher plus|voir plus|show more)/i.test(text(b)) && !b.closest("nav, header, aside"),
+    );
+    if (more) {
+      more.click();
+      await sleep(1500 + Math.random() * 1000);
+    }
+    const next = collect(max).length;
+    stable = next > count ? 0 : stable + 1;
+    count = next;
+  }
+  return collect(max);
 }
 
 export type MessageResult = { ok: true } | { ok: false; code: string; detail?: string };
