@@ -67,7 +67,7 @@ export function Header({
   return (
     <header className="sticky top-0 z-10 space-y-3 border-b border-white/5 bg-navy-dark/95 px-4 pb-3 pt-4 backdrop-blur">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Mascot size={34} />
           <span className="font-display text-2xl uppercase leading-none tracking-wide">
             {PRODUCT_NAME} <span className="text-gold">{PRODUCT_TAGLINE}</span>
@@ -81,12 +81,12 @@ export function Header({
       </div>
       {showControls && (
         <>
-          <div className="flex items-center gap-2 rounded-xl bg-navy-light px-3">
+          <div className="flex min-w-0 items-center gap-2 rounded-xl bg-navy-light px-3">
             <Search className="h-4 w-4 text-slate-400" />
             <select
               value={activePersonaId ?? ""}
               onChange={(e) => onPersona(e.target.value)}
-              className="h-10 flex-1 bg-transparent text-sm font-medium outline-none"
+              className="h-10 min-w-0 flex-1 truncate bg-transparent text-sm font-medium outline-none"
             >
               {personas.map((p) => (
                 <option key={p.id} value={p.id} className="bg-navy">{p.name}</option>

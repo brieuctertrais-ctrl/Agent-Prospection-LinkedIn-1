@@ -208,7 +208,7 @@ export function App() {
   const showControls = !["loading", "login", "noPersona"].includes(screen.name);
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col overflow-x-hidden">
       <Header
         personas={personas}
         activePersonaId={activePersonaId}

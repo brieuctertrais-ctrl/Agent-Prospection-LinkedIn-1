@@ -4,6 +4,7 @@
 @tailwind utilities;
 
 html, body, #root { height: 100%; }
+body { overflow-x: hidden; }
 body { @apply bg-navy text-slate-100 antialiased; font-family: Inter, system-ui, sans-serif; }
 
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
