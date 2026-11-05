@@ -84,8 +84,7 @@ supabase functions deploy generate-message
 supabase functions deploy score-profile
 ```
 
-Planifier la purge RGPD (pg_cron) :
-`select cron.schedule('purge-rejected', '0 3 * * *', 'select public.purge_rejected_prospects()');`
+La purge RGPD (rejetés : 6 mois réglables, consultés sans suite : 3 mois, sans réponse : 3 ans, journaux : 13 mois) est planifiée chaque nuit par la migration `20261111000000_rgpd_purge.sql` (pg_cron).
 
 ### 2. Web app
 

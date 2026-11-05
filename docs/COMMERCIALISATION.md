@@ -17,7 +17,7 @@ Avant de vendre l'outil à des clients, il reste à faire :
 - [ ] Ajouter le domaine de production au widget Cloudflare Turnstile
 - [ ] Ajouter le domaine de production dans `externally_connectable` (manifest de l'extension)
       et dans `VITE_WEB_APP_URL`
-- [ ] Planifier la purge RGPD : `select cron.schedule('purge-rejected', '0 3 * * *', 'select public.purge_rejected_prospects()');`
+- [x] Purge RGPD planifiée chaque nuit (migration `20261111000000_rgpd_purge.sql`) — vérifier qu'elle tourne : Supabase → Integrations → Cron
 - [ ] Sauvegardes Supabase (offre payante : sauvegardes quotidiennes / PITR)
 
 ## 3. Extension Chrome

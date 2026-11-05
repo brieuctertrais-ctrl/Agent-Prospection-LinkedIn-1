@@ -14,6 +14,7 @@ const SettingsSchema = z
     weekly_invitations: int(1, 200),
     daily_messages: int(1, 150),
     min_match_score: int(0, 100),
+    purge_rejected_after_months: int(1, 36),
     min_delay_seconds: int(30, 600),
     delay_1: int(1, 60),
     delay_2: int(2, 90),

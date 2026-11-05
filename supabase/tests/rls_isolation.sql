@@ -207,3 +207,30 @@ set role anon;
 select pg_temp.expect_error($$select get_stats(30)$$, 'anon cannot call get_stats');
 reset role;
 \echo ALL STATS TESTS PASSED
+
+-- ===== GDPR purge (run as the database owner, like the nightly job) =====
+reset role;
+insert into prospects (id, user_id, linkedin_url, updated_at) values
+  ('20000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-00000000000b', 'https://www.linkedin.com/in/old-viewed/', now() - interval '4 months'),
+  ('20000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-00000000000b', 'https://www.linkedin.com/in/recent-viewed/', now()),
+  ('20000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-00000000000b', 'https://www.linkedin.com/in/old-rejected/', now()),
+  ('20000000-0000-0000-0000-0000000000c4', '00000000-0000-0000-0000-00000000000b', 'https://www.linkedin.com/in/old-noreply/', now()),
+  ('20000000-0000-0000-0000-0000000000c5', '00000000-0000-0000-0000-00000000000b', 'https://www.linkedin.com/in/old-replied/', now());
+insert into decisions (user_id, prospect_id, decision, created_at) values
+  ('00000000-0000-0000-0000-00000000000b', '20000000-0000-0000-0000-0000000000c3', 'reject', now() - interval '7 months');
+alter table leads disable trigger leads_touch;
+insert into leads (user_id, prospect_id, status, updated_at) values
+  ('00000000-0000-0000-0000-00000000000b', '20000000-0000-0000-0000-0000000000c4', 'invitation_sent', now() - interval '37 months'),
+  ('00000000-0000-0000-0000-00000000000b', '20000000-0000-0000-0000-0000000000c5', 'replied', now() - interval '37 months');
+alter table leads enable trigger leads_touch;
+insert into action_logs (user_id, action_type, result, created_at) values ('00000000-0000-0000-0000-00000000000b', 'profile_view', 'success', now() - interval '14 months');
+select pg_temp.expect(purge_rejected_prospects() >= 3, 'purge removed old prospects');
+select pg_temp.expect(not exists (select 1 from prospects where id in ('20000000-0000-0000-0000-0000000000c1','20000000-0000-0000-0000-0000000000c3','20000000-0000-0000-0000-0000000000c4')), 'viewed>3m, rejected>6m, no-reply>3y purged');
+select pg_temp.expect((select count(*) from prospects where id in ('20000000-0000-0000-0000-0000000000c2','20000000-0000-0000-0000-0000000000c5')) = 2, 'recent and replied prospects kept');
+select pg_temp.expect(exists (select 1 from exclusion_list where linkedin_url = 'https://www.linkedin.com/in/old-rejected/'), 'rejected profile stays in exclusion list');
+select pg_temp.expect(not exists (select 1 from action_logs where created_at < now() - interval '13 months'), 'old logs purged');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect_error($$update user_settings set purge_rejected_after_months = 120$$, 'retention setting bounded');
+reset role;
+\echo ALL PURGE TESTS PASSED

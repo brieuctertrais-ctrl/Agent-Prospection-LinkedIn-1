@@ -23,7 +23,8 @@ pour des dizaines de messages).
    `supabase/migrations/20261107000000_persona_limits.sql`, puis
    `supabase/migrations/20261108000000_followups.sql`, puis
    `supabase/migrations/20261109000000_relances.sql`, puis
-   `supabase/migrations/20261110000000_stats.sql` (dans cet ordre, sans erreur).
+   `supabase/migrations/20261110000000_stats.sql`, puis
+   `supabase/migrations/20261111000000_rgpd_purge.sql` (dans cet ordre, sans erreur).
 4. **Authentication → URL Configuration** :
    - Site URL : `http://localhost:3000`
    - Redirect URLs : ajoute `http://localhost:3000/auth/callback`

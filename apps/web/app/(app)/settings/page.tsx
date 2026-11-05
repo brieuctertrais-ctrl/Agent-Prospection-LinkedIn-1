@@ -16,6 +16,7 @@ const FIELDS = [
   ["min_delay_seconds", "Délai minimum entre deux invitations (s)"],
   ["max_delay_seconds", "Délai maximum entre deux invitations (s)"],
   ["work_start_hour", "Début de plage horaire (h)"],
+  ["purge_rejected_after_months", "Conservation des profils rejetés (mois, 1 à 36)"],
   ["work_end_hour", "Fin de plage horaire (h)"],
 ] as const;
 
@@ -76,6 +77,16 @@ export default async function SettingsPage() {
           </div>
           <Button type="submit">{t("common.save")}</Button>
         </form>
+      </Card>
+      <Card className="p-5 text-sm text-slate-300">
+        <p className="mb-2 font-semibold text-white">{t("settings.retention.title")}</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>{t("settings.retention.rejected")}</li>
+          <li>{t("settings.retention.viewed")}</li>
+          <li>{t("settings.retention.noReply")}</li>
+          <li>{t("settings.retention.kept")}</li>
+          <li>{t("settings.retention.exclusion")}</li>
+        </ul>
       </Card>
       <Card className="border-red-500/20">
         <form action={deleteProspectingData}>
