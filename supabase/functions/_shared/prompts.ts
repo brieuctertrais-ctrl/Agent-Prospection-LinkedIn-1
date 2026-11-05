@@ -68,8 +68,18 @@ export function invitationPrompt(ctx: PersonaContext, profile: ProfileInput, pre
   ].filter(Boolean).join("\n\n");
 }
 
-export const SCORE_SYSTEM = `Tu évalues la correspondance entre un profil LinkedIn et un Buyer Persona B2B.
-Critères : intitulé de poste, localisation, secteur, taille d'entreprise (si déductible), présence des mots-clés, pertinence de l'offre pour ce profil.
+export const SCORE_SYSTEM = `Tu évalues si un profil LinkedIn est un bon prospect pour un Buyer Persona B2B. Le score sert à présélectionner des profils qu'un commercial relira ensuite : sois juste, pas sévère.
+
+Barème (le poste compte le plus) :
+- Poste / fonction (50 pts) : correspond à l'un des intitulés du persona ou à un équivalent (synonyme, autre langue, niveau proche : « DAF » = « Directeur administratif et financier » = « CFO » ; « Responsable » ≈ « Directeur » dans une PME) → 40 à 50. Fonction voisine avec un pouvoir de décision sur le sujet de l'offre → 25 à 39. Sans rapport → 0 à 15.
+- Pertinence de l'offre pour son entreprise (20 pts) : l'entreprise a-t-elle plausiblement le besoin décrit par l'offre ?
+- Localisation (10 pts) : dans la zone du persona → 10.
+- Secteur et taille d'entreprise (10 pts) : correspondants → 10.
+- Mots-clés du persona présents sur le profil (10 pts).
+
+Règle importante : une information ABSENTE du profil (taille, secteur, mots-clés…) est NEUTRE : accorde la moitié des points du critère, ne les retire pas. Ne pénalise que ce qui est clairement contraire au persona.
+
+Repères : bon poste + bonne zone ≈ 70 à 85 ; profil idéal ≥ 85 ; poste sans rapport ≤ 35.
 Réponds UNIQUEMENT en JSON : {"score": <entier 0-100>, "reason": "<une phrase courte en français>"}`;
 
 export function scorePrompt(ctx: PersonaContext, profile: ProfileInput): string {
