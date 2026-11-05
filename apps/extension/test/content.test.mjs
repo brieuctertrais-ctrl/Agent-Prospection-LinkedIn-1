@@ -67,6 +67,7 @@ test("newer LinkedIn layout: title/heuristic fallbacks and never clicks another 
   assert.deepEqual(res, { ok: true });
   assert.equal(await page.evaluate(() => window.__note), note);
   assert.equal(await page.evaluate(() => window.__wrongClicked ?? false), false);
+  assert.equal(await page.evaluate(() => window.__sentWithoutNote ?? false), false);
   } finally {
     await browser.close();
   }

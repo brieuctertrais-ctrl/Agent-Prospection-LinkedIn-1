@@ -23,17 +23,24 @@
     </div>
   </section>
 </div>
+<div role="dialog" aria-label="Messagerie" id="messaging"><button>Message</button><div>Messagerie</div></div>
+<div id="interop-outlet"></div>
 <script>
+  // Newer LinkedIn: the invitation modal is rendered inside an open shadow root.
+  const host = document.getElementById('interop-outlet');
+  const shadow = host.attachShadow({ mode: 'open' });
   document.getElementById('wrong').addEventListener('click', () => { window.__wrongClicked = true; });
   document.getElementById('connect').addEventListener('click', (e) => {
     e.preventDefault();
     const d = document.createElement('div');
     d.setAttribute('role', 'dialog');
-    d.innerHTML = '<button>Ajouter une note</button><button>Envoyer sans note</button>';
-    document.body.appendChild(d);
-    d.querySelector('button').addEventListener('click', () => {
-      d.innerHTML = '<textarea></textarea><button disabled>Envoyer</button>';
-      const ta = d.querySelector('textarea'); const send = d.querySelector('button');
+    d.innerHTML = '<h2>Ajouter une note à votre invitation ?</h2><p>Personnalisez l’invitation que vous envoyez à François MATHON.</p>'
+      + '<button id="add">Ajouter une note</button><button id="nonote">Envoyer sans note</button>';
+    shadow.appendChild(d);
+    d.querySelector('#nonote').addEventListener('click', () => { window.__sentWithoutNote = true; });
+    d.querySelector('#add').addEventListener('click', () => {
+      d.innerHTML = '<h2>Ajouter une note à votre invitation</h2><textarea></textarea><button>Annuler</button><button id="send" disabled>Envoyer</button>';
+      const ta = d.querySelector('textarea'); const send = d.querySelector('#send');
       ta.addEventListener('input', () => { send.disabled = !ta.value; window.__note = ta.value; });
       send.addEventListener('click', () => {
         d.remove();

@@ -1,5 +1,5 @@
 import type { SendCode } from "../lib/protocol";
-import { dialogMatches, humanPause, isVisible, pageMatches, query, setNativeValue, text, waitFor } from "./dom";
+import { deepButton, deepQueryAll, dialogMatches, humanPause, isReallyVisible, isVisible, pageMatches, query, setNativeValue, text, waitFor } from "./dom";
 import { findNameElement, findTopCard, nameFromTitle } from "./topcard";
 import { WARNING_PATTERNS } from "./selectors";
 
@@ -40,38 +40,43 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   connect.click();
   await humanPause();
 
-  const dialog = await waitFor(() => query<HTMLElement>("dialog"), 5000);
+  const dialog = await waitFor(() => inviteDialog(), 6000);
   if (!dialog) return { ok: false, code: "note_not_found", detail: "dialog" };
-  if (dialogMatches(WARNING_PATTERNS.weeklyLimit)) return { ok: false, code: "limit_reached" };
+  if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || warningIn(dialog, WARNING_PATTERNS.weeklyLimit)) return { ok: false, code: "limit_reached" };
 
-  // 2. Add a note
-  const addNote = await waitFor(() => query<HTMLElement>("addNoteButton", dialog), 4000);
+  // 2. Add a note (exact label match: never "Envoyer sans note")
+  const addNote = await waitFor(() => deepButton(inviteDialog() ?? dialog, ADD_NOTE) ?? query<HTMLElement>("addNoteButton"), 4000);
   if (!addNote) return { ok: false, code: "note_not_found" };
   addNote.click();
   await humanPause();
 
-  if (dialogMatches(WARNING_PATTERNS.noteLimit) && !query("noteTextarea")) {
-    return { ok: false, code: "limit_reached", detail: "note_limit" };
-  }
-
   // 3. Paste the note
-  const textarea = await waitFor(() => query<HTMLTextAreaElement>("noteTextarea"), 4000);
-  if (!textarea) return { ok: false, code: "textarea_not_found" };
+  const textarea = await waitFor(() => {
+    const d = inviteDialog();
+    const t = (d ? deepQueryAll<HTMLTextAreaElement>("textarea", d) : deepQueryAll<HTMLTextAreaElement>("textarea")).find(isReallyVisible);
+    return t ?? query<HTMLTextAreaElement>("noteTextarea");
+  }, 4000);
+  if (!textarea) {
+    const d = inviteDialog();
+    if (d && warningIn(d, WARNING_PATTERNS.noteLimit)) return { ok: false, code: "limit_reached", detail: "note_limit" };
+    return { ok: false, code: "textarea_not_found" };
+  }
   textarea.focus();
   setNativeValue(textarea, note);
   await humanPause(600, 1500);
 
-  // 4. Send
+  // 4. Send (exact labels only)
   const send = await waitFor(() => {
-    const b = query<HTMLButtonElement>("sendButton", query("dialog") ?? document);
-    return b && !b.disabled ? b : null;
+    const d = inviteDialog();
+    const b = (d && deepButton(d, SEND)) ?? query<HTMLButtonElement>("sendButton", query("dialog") ?? document);
+    return b && !(b as HTMLButtonElement).disabled && b.getAttribute("aria-disabled") !== "true" ? b : null;
   }, 4000);
   if (!send) return { ok: false, code: "send_not_found" };
   send.click();
 
   // 5. Verify
   const done = await waitFor(() => {
-    if (dialogMatches(WARNING_PATTERNS.weeklyLimit)) return "limit";
+    if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || deepQueryAll<HTMLElement>(DIALOG_SEL).some((d) => warningIn(d, WARNING_PATTERNS.weeklyLimit))) return "limit";
     if (query("pendingButton") || isPending(findTopCard(findNameElement(name)))) return "pending";
     return null;
   }, 8000, 300);
@@ -128,4 +133,22 @@ function findMenuConnect(name: string): HTMLElement | null {
 function isPending(card: HTMLElement | null): boolean {
   if (query("pendingButton")) return true;
   return Boolean(card && clickables(card).some((el) => /^(en attente|pending)$/i.test(text(el)) || /en attente|pending|retirer l.invitation|withdraw/i.test(el.getAttribute("aria-label") ?? "")));
+}
+
+const DIALOG_SEL = "[role='dialog'], [role='alertdialog'], dialog[open], .artdeco-modal";
+const ADD_NOTE = ["Ajouter une note", "Add a note"];
+const SEND = ["Envoyer", "Send", "Envoyer l’invitation", "Envoyer l'invitation", "Send invitation", "Send now", "Envoyer maintenant"];
+
+/** The invitation modal (light DOM or shadow DOM), not another overlay such as messaging. */
+function inviteDialog(): HTMLElement | null {
+  const dialogs = deepQueryAll<HTMLElement>(DIALOG_SEL).filter(isReallyVisible);
+  const isInvite = (d: HTMLElement) =>
+    /ajouter une note|add a note|invitation|inviter|invite|personnalis|note/i.test(d.innerText || "") ||
+    Boolean(deepQueryAll("textarea", d).length);
+  return dialogs.reverse().find(isInvite) ?? null;
+}
+
+function warningIn(root: HTMLElement, patterns: RegExp[]): boolean {
+  const t = root.innerText || "";
+  return patterns.some((p) => p.test(t));
 }

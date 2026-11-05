@@ -76,3 +76,40 @@ export function dialogMatches(patterns: RegExp[]): boolean {
     patterns.some((p) => p.test(d.innerText)),
   );
 }
+
+/** querySelectorAll that also looks inside open shadow roots (LinkedIn renders some modals there). */
+export function deepQueryAll<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T[] {
+  const out: T[] = [];
+  const visit = (node: ParentNode) => {
+    try {
+      out.push(...Array.from(node.querySelectorAll<T>(selector)));
+    } catch {
+      return;
+    }
+    for (const el of Array.from(node.querySelectorAll<HTMLElement>("*"))) {
+      if (el.shadowRoot) visit(el.shadowRoot);
+    }
+  };
+  visit(root);
+  if (root instanceof Element && root.shadowRoot) visit(root.shadowRoot);
+  return out;
+}
+
+export function isReallyVisible(el: Element): boolean {
+  const r = (el as HTMLElement).getBoundingClientRect?.();
+  if (!r || r.width === 0 || r.height === 0) return false;
+  const style = getComputedStyle(el as HTMLElement);
+  return style.visibility !== "hidden" && style.display !== "none";
+}
+
+const lc = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** Visible button whose text or aria-label EXACTLY equals one of `labels` (never a partial match). */
+export function deepButton(root: ParentNode, labels: string[]): HTMLElement | null {
+  const wanted = labels.map(lc);
+  return (
+    deepQueryAll<HTMLElement>("button, [role='button'], a", root).find(
+      (b) => isReallyVisible(b) && (wanted.includes(lc(b.innerText)) || wanted.includes(lc(b.getAttribute("aria-label")))),
+    ) ?? null
+  );
+}
