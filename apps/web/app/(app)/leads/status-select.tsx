@@ -8,7 +8,7 @@ export function StatusSelect({ id, value, labels }: { id: string; value: LeadSta
   const [pending, start] = useTransition();
   return (
     <Select
-      className="h-8 text-xs"
+      className="h-8 w-full text-xs"
       disabled={pending}
       defaultValue={value}
       onChange={(e) => {

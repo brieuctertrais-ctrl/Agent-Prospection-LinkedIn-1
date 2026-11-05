@@ -64,7 +64,7 @@ export default async function LeadsPage({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-white/5 bg-navy-light">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[1150px] text-left text-sm">
             <thead className="border-b border-white/5 text-xs uppercase text-slate-400">
               <tr>
                 {(["name", "title", "company", "location", "persona", "message", "date", "status"] as const).map((c) => (
@@ -78,7 +78,7 @@ export default async function LeadsPage({
                 const photo = safePhotoUrl(l.photo_url);
                 return (
                 <tr key={l.id} className="border-b border-white/5 align-top last:border-0">
-                  <td className="px-4 py-3">
+                  <td className="min-w-[200px] px-4 py-3">
                     <div className="flex items-center gap-3">
                       {photo ? (
                         <img src={photo} alt="" referrerPolicy="no-referrer" className="h-9 w-9 rounded-full object-cover" />
@@ -89,7 +89,7 @@ export default async function LeadsPage({
                       )}
                       {url ? (
                         <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium hover:text-gold">
-                          {l.full_name} <ExternalLink className="h-3 w-3" />
+                          {l.full_name} <ExternalLink className="h-3 w-3 shrink-0" />
                         </a>
                       ) : (
                         <span className="font-medium">{l.full_name}</span>
@@ -100,13 +100,19 @@ export default async function LeadsPage({
                   <td className="px-4 py-3 text-slate-300">{l.company}</td>
                   <td className="px-4 py-3 text-slate-300">{l.location}</td>
                   <td className="px-4 py-3 text-slate-300">{l.persona_name}</td>
-                  <td className="max-w-[320px] px-4 py-3">
-                    <p className="line-clamp-3 whitespace-pre-line rounded-lg bg-cream p-2 text-xs text-navy">{l.message_text}</p>
+                  <td className="w-[300px] px-4 py-3">
+                    {l.message_text && (
+                      <details className="group rounded-lg bg-cream p-2 text-xs text-navy">
+                        <summary className="cursor-pointer list-none">
+                          <span className="line-clamp-3 whitespace-pre-line group-open:line-clamp-none">{l.message_text}</span>
+                        </summary>
+                      </details>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-slate-400">
                     {new Date(l.created_at).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="min-w-[180px] px-4 py-3">
                     <StatusSelect id={l.id} value={l.status} labels={statusLabels} />
                   </td>
                 </tr>
