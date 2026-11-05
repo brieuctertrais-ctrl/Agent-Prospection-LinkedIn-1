@@ -21,7 +21,7 @@ export default async function PersonasPage() {
       <div className="space-y-3">
         {(personas ?? []).length === 0 && (
           <div className="flex items-center gap-4 rounded-2xl bg-navy-light p-6">
-            <img src="/mascot.svg" alt="" className="h-16 w-16" />
+            <img src="/mascot.svg" alt="" width={64} height={64} className="h-16 w-16" />
             <p className="text-slate-300">{t("personas.empty")}</p>
           </div>
         )}

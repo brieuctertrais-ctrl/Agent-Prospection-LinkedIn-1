@@ -21,7 +21,7 @@ export default async function TutoPage() {
               {v.url ? (
                 <iframe src={v.url} className="h-full w-full" allowFullScreen title={v.title} />
               ) : (
-                <img src="/mascot.svg" alt="" className="h-16 w-16 opacity-60" />
+                <img src="/mascot.svg" alt="" width={64} height={64} className="h-16 w-16 opacity-60" />
               )}
             </div>
             <p className="font-medium">{v.title}</p>

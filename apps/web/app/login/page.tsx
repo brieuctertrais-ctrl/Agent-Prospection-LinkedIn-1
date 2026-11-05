@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-8 rounded-2xl bg-navy-light p-8 shadow-xl">
         <div className="flex flex-col items-center gap-4">
-          <img src="/mascot.svg" alt="" className="h-20 w-20" />
+          <img src="/mascot.svg" alt="" width={80} height={80} className="h-20 w-20" />
           <Logo withAvatar={false} />
         </div>
         <h1 className="text-center text-xl font-semibold">{t("auth.title")}</h1>
