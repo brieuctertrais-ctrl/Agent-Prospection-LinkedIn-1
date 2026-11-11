@@ -13,13 +13,15 @@
 import type { Persona } from "@kairo/shared";
 import { ApiError, countToday, countWeek, generateFollowup, generateMessage, logAction, type FollowupKind } from "./api";
 import { nextProfile, type Settings, type SkipEvent } from "./engine";
-import { patchState } from "./storage";
+import { AUTO_RESUME_CODES, recordDiagnostic, recordPause } from "./recovery";
 import { supabase } from "./supabase";
 import { navigate, sendToTab } from "./tabs";
 import { CONNECTIONS_URL, INBOX_URL } from "../linkedin/messaging";
 import { sleep } from "../linkedin/dom";
 
-const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed"]);
+const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed", "logged_out"]);
+/** Real LinkedIn warnings: everything stops until the user resumes. Page-reading problems only skip a check. */
+const HARD_STOP = new Set(["security_check", "limit_reached", "logged_out"]);
 
 async function userId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
@@ -227,9 +229,18 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
     return { kind: "failed", code: "note_too_long" };
   }
 
+  const req = isMessage ? ({ type: "SEND_MESSAGE", text: message.text } as const) : ({ type: "SEND_INVITATION", note: message.text } as const);
   await navigate(tabId, prospect.linkedin_url);
   await sleep(2500 + Math.random() * 2500);
-  const res = await sendToTab(tabId, isMessage ? { type: "SEND_MESSAGE", text: message.text } : { type: "SEND_INVITATION", note: message.text });
+  let res = await sendToTab(tabId, req);
+  // The profile was not understood BEFORE anything was clicked (name not found, page not ready):
+  // reload once and try again. Never retried after a click (no risk of a double send).
+  if (!res.ok && ((res.code === "ui_changed" && res.detail?.startsWith("profileName")) || res.detail === "content_script_unreachable")) {
+    await sleep(4000 + Math.random() * 3000);
+    await navigate(tabId, prospect.linkedin_url);
+    await sleep(2500 + Math.random() * 2500);
+    res = await sendToTab(tabId, req);
+  }
 
   if (res.ok && (res.type === "INVITATION_SENT" || res.type === "MESSAGE_SENT")) {
     await supabase.from("action_queue").update({ status: "done", attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
@@ -253,9 +264,11 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   await fail(res.code);
   if (PAUSE_CODES.has(res.code)) {
     // LinkedIn warning, limit or check: stop everything, the user resumes manually (never worked around).
-    if (item.campaign_id) await supabase.from("campaigns").update({ status: "paused", paused_reason: res.code }).eq("id", item.campaign_id);
-    await patchState({ pausedReason: res.code });
-    await logAction("pause", "skipped", { code: res.code, autopilot: true });
+    // Temporary page problems pause locally and lift themselves (recovery.ts); real warnings also pause the campaign.
+    if (item.campaign_id && !AUTO_RESUME_CODES.has(res.code)) {
+      await supabase.from("campaigns").update({ status: "paused", paused_reason: res.code }).eq("id", item.campaign_id);
+    }
+    await recordPause(res.code, action, res.detail);
     return { kind: "paused", code: res.code };
   }
   const noteLimit = res.code === "note_too_long" ? Math.max(150, Math.min(300, Number(res.detail) || noteMax)) : undefined;
@@ -281,10 +294,9 @@ export async function checkAcceptances(tabId: number, maxProposals = 10): Promis
   await sleep(2500 + Math.random() * 2000);
   const res = await sendToTab(tabId, { type: "SCRAPE_CONNECTIONS" });
   if (!res.ok) {
-    if (PAUSE_CODES.has(res.code)) {
-      await patchState({ pausedReason: res.code });
-      await logAction("pause", "skipped", { code: res.code, autopilot: true, step: "acceptances" });
-    }
+    if (HARD_STOP.has(res.code)) await recordPause(res.code, "connections", res.detail);
+    else await recordDiagnostic(res.code, "connections", res.detail); // retried at the next hourly check
+    await logAction("connections_check", "failure", { code: res.code, detail: res.detail?.slice(0, 600) });
     return { accepted: 0, proposed: 0, code: res.code };
   }
   if (res.type !== "CONNECTIONS") return { accepted: 0, proposed: 0, code: "unknown" };
@@ -353,10 +365,9 @@ export async function checkReplies(tabId: number): Promise<{ replied: string[]; 
   await sleep(2500 + Math.random() * 2000);
   const res = await sendToTab(tabId, { type: "SCRAPE_INBOX" });
   if (!res.ok) {
-    if (PAUSE_CODES.has(res.code)) {
-      await patchState({ pausedReason: res.code });
-      await logAction("pause", "skipped", { code: res.code, autopilot: true, step: "replies" });
-    }
+    if (HARD_STOP.has(res.code)) await recordPause(res.code, "inbox", res.detail);
+    else await recordDiagnostic(res.code, "inbox", res.detail); // retried at the next hourly check
+    await logAction("inbox_check", "failure", { code: res.code, detail: res.detail?.slice(0, 600) });
     return { replied: [], code: res.code };
   }
   if (res.type !== "INBOX") return { replied: [], code: "unknown" };

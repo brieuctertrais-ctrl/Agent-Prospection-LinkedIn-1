@@ -136,7 +136,7 @@ export function AutopilotPanel({
   const toggleAuto = async (on: boolean) => {
     if (on) {
       await resumeCampaigns();
-      await patchState({ pausedReason: undefined });
+      await patchState({ pausedReason: undefined, pausedAt: undefined });
       await patchAuto({ enabled: true, nextAt: undefined, notified: undefined });
       await chrome.runtime.sendMessage({ type: "AUTOPILOT_TICK" }).catch(() => undefined);
     } else {

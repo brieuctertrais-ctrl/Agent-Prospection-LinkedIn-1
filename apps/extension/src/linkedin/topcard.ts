@@ -67,12 +67,48 @@ export function linesAfterName(card: HTMLElement | null, name: string): { headli
   return { headline: headline.slice(0, 500), location: location.slice(0, 200) };
 }
 
+const UNAVAILABLE = [
+  /ce profil n.est pas disponible/i,
+  /this profile is not available/i,
+  /profile (is )?unavailable/i,
+  /cette page n.existe pas/i,
+  /this page doesn.t exist/i,
+  /page (introuvable|not found)/i,
+];
+
+/** Kind of page, from the path only (never the full URL: it would identify the person). */
+export function pageKind(): string {
+  const p = location.pathname;
+  if (/^\/in\//.test(p)) return "profile";
+  if (/^\/search\//.test(p)) return "search";
+  if (/^\/mynetwork\//.test(p)) return "network";
+  if (/^\/messaging\//.test(p)) return "messaging";
+  if (/^\/company\//.test(p)) return "company";
+  if (/^\/(authwall|login|uas\/login|signup|checkpoint\/lg)/.test(p)) return "login";
+  if (/^\/checkpoint\//.test(p)) return "checkpoint";
+  if (/^\/feed/.test(p)) return "feed";
+  return "other";
+}
+
+/**
+ * Explains why a page could not be read when it is not a layout change:
+ * logged out of LinkedIn, or a deleted / private / unavailable profile.
+ */
+export function pageProblem(): "logged_out" | "profile_unavailable" | null {
+  if (pageKind() === "login" || document.querySelector("input[name='session_key'], form.login__form")) return "logged_out";
+  const body = document.body?.innerText ?? "";
+  if (UNAVAILABLE.some((r) => r.test(body)) && !findNameElement(nameFromTitle())) return "profile_unavailable";
+  return null;
+}
+
 /** Which key elements are present — structural info only, no personal data. Logged on failures. */
 export function diagnose(): string {
   const name = nameFromTitle();
   const nameEl = findNameElement(name);
   const card = findTopCard(nameEl);
   return JSON.stringify({
+    page: pageKind(),
+    ready: document.readyState,
     title_name: Boolean(name),
     name_css: Boolean(query("profileName")),
     name_el: nameEl ? nameEl.tagName : null,
@@ -80,6 +116,8 @@ export function diagnose(): string {
     top_card: card ? card.tagName : null,
     h1_count: document.querySelectorAll("h1").length,
     connect_links: document.querySelectorAll("a[href*='custom-invite']").length,
+    buttons: document.querySelectorAll("button").length,
+    dialogs: document.querySelectorAll("[role='dialog']").length,
   });
 }
 

@@ -24,6 +24,8 @@ export interface AutoState {
   /** Last outcome, as an i18n key suffix (sent, failed, outside_hours, quota, none, paused, paused_by_user). */
   last?: string;
   lastCode?: string;
+  /** Day a "check page not readable" notification was already shown. */
+  checkFailDay?: string;
   /** Avoid repeating the same notification. */
   notified?: string;
 }

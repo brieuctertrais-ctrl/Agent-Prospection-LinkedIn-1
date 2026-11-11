@@ -5,7 +5,7 @@ import { getState, patchState, today, type LocalState } from "./storage";
 import { supabase } from "./supabase";
 import { navigate, sendToTab } from "./tabs";
 import { sleep } from "../linkedin/dom";
-import { SELECTORS_VERSION } from "../linkedin/selectors";
+import { recordPause } from "./recovery";
 
 export interface Settings {
   daily_profile_views: number;
@@ -31,7 +31,9 @@ export type NextResult =
   | { kind: "low_match"; skipped: SkipCounts }
   | { kind: "paused"; code: SendCode | string };
 
-const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed"]);
+const PAUSE_CODES = new Set(["security_check", "limit_reached", "ui_changed", "logged_out"]);
+/** Consecutive unreadable profiles before concluding that LinkedIn really changed its layout. */
+const MAX_UI_FAILS = 3;
 const MAX_AUTO_SKIPS = 15;
 
 export interface SkipCounts {
@@ -40,10 +42,29 @@ export interface SkipCounts {
   unreadable: number;
 }
 
-async function pause(code: string, detail?: string): Promise<NextResult> {
-  await patchState({ pausedReason: code });
-  await logAction("pause", "skipped", { code, detail, selectors: SELECTORS_VERSION });
+async function pause(code: string, step: string, detail?: string): Promise<NextResult> {
+  await recordPause(code, step, detail);
   return { kind: "paused", code };
+}
+
+type ContentResult = Awaited<ReturnType<typeof sendToTab>>;
+
+/** A page that was not understood, or a content script that did not answer: worth a second try. */
+function transient(res: ContentResult): boolean {
+  return !res.ok && (res.code === "ui_changed" || res.detail === "content_script_unreachable");
+}
+
+/** Reloads the page once and asks again (slow page, half-rendered layout, LinkedIn hiccup). */
+async function retryOnce(tabId: number, url: string, req: Parameters<typeof sendToTab>[1], res: ContentResult): Promise<ContentResult> {
+  if (!transient(res)) return res;
+  await sleep(4000 + Math.random() * 3000);
+  try {
+    await navigate(tabId, url);
+  } catch {
+    return res;
+  }
+  await sleep(2500 + Math.random() * 1500);
+  return sendToTab(tabId, req);
 }
 
 const PAGES_PER_TITLE = 10; // then move on to the next job title (fresher, more relevant results)
@@ -106,8 +127,9 @@ async function refillQueue(tabId: number, persona: Persona): Promise<NextResult 
     });
     await navigate(tabId, url);
     await sleep(1500 + Math.random() * 1500);
-    const res = await sendToTab(tabId, { type: "SCRAPE_SEARCH_RESULTS" });
-    if (!res.ok) return PAUSE_CODES.has(res.code) ? pause(res.code, res.detail) : pause("ui_changed", res.detail);
+    let res = await sendToTab(tabId, { type: "SCRAPE_SEARCH_RESULTS" });
+    res = await retryOnce(tabId, url, { type: "SCRAPE_SEARCH_RESULTS" }, res);
+    if (!res.ok) return pause(PAUSE_CODES.has(res.code) ? res.code : "ui_changed", "search", res.detail);
     if (res.type !== "SEARCH_RESULTS") break;
     await logAction("search_page", "success", {
       title_index: queue.titleIndex ?? 0,
@@ -156,6 +178,7 @@ export async function nextProfile(
   onSkip?: (e: SkipEvent) => void,
 ): Promise<NextResult> {
   const skipped: SkipCounts = { lowScore: 0, connected: 0, unreadable: 0 };
+  let uiFails = 0;
   for (let skips = 0; skips < MAX_AUTO_SKIPS; skips++) {
     const views = await countToday("profile_view");
     if (views >= (settings.daily_profile_views ?? DEFAULT_QUOTAS.dailyProfileViews)) return { kind: "daily_cap" };
@@ -168,9 +191,15 @@ export async function nextProfile(
     if (skips > 0) await sleep(3000 + Math.random() * 5000); // human pace between visits
     await navigate(tabId, url);
     await sleep(1200 + Math.random() * 1200);
-    const res = await sendToTab(tabId, { type: "SCRAPE_PROFILE" });
+    let res = await sendToTab(tabId, { type: "SCRAPE_PROFILE" });
+    res = await retryOnce(tabId, url, { type: "SCRAPE_PROFILE" }, res);
     if (!res.ok) {
-      if (PAUSE_CODES.has(res.code)) return pause(res.code, res.detail);
+      // One unreadable profile is not a LinkedIn change (deleted profile, slow page...): skip it.
+      // Several in a row are: then pause (the pause lifts itself later, see recovery.ts).
+      if (transient(res)) {
+        uiFails += 1;
+        if (uiFails >= MAX_UI_FAILS) return pause("ui_changed", "profile", res.detail);
+      } else if (PAUSE_CODES.has(res.code)) return pause(res.code, "profile", res.detail);
       await logAction("profile_view", "failure", { code: res.code, detail: res.detail }, { linkedin_url: url });
       skipped.unreadable += 1;
       onSkip?.({ reason: "unreadable" });
@@ -182,6 +211,7 @@ export async function nextProfile(
       continue;
     }
     const profile = res.profile;
+    uiFails = 0;
     await logAction("profile_view", "success", {}, { linkedin_url: profile.linkedin_url });
 
     if (profile.connection_state === "connected" || profile.connection_state === "pending") {

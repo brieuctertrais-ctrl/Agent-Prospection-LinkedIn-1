@@ -194,3 +194,40 @@ test("onboarding: current company link on a profile and company 'About' page", {
     await browser.close();
   }
 });
+
+test("unreadable pages are explained: deleted profile, logged out — a normal profile is never flagged", { timeout: 60000 }, async () => {
+  const pages = {
+    "https://www.linkedin.com/in/ancien-profil/": readFileSync(new URL("./profile-unavailable.html", import.meta.url), "utf8"),
+    "https://www.linkedin.com/authwall?trk=x": readFileSync(new URL("./login.html", import.meta.url), "utf8"),
+    "https://www.linkedin.com/in/sami-benali/": html,
+  };
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => {
+      const body = pages[r.request().url()];
+      return body ? r.fulfill({ contentType: "text/html; charset=utf-8", body }) : r.abort();
+    });
+    const check = async (url) => {
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      await page.addScriptTag({ content: code });
+      return page.evaluate(() => ({ problem: window.kairo.pageProblem(), profile: window.kairo.scrapeProfile(), diag: JSON.parse(window.kairo.diagnose()) }));
+    };
+    const gone = await check("https://www.linkedin.com/in/ancien-profil/");
+    assert.equal(gone.profile, null);
+    assert.equal(gone.problem, "profile_unavailable");
+    assert.equal(gone.diag.page, "profile");
+
+    const login = await check("https://www.linkedin.com/authwall?trk=x");
+    assert.equal(login.problem, "logged_out");
+    assert.equal(login.diag.page, "login");
+
+    const ok = await check("https://www.linkedin.com/in/sami-benali/");
+    assert.equal(ok.problem, null);
+    assert.equal(ok.profile.full_name, "Sami Benali");
+    // The diagnostic is structural only: no name, no URL.
+    assert.doesNotMatch(JSON.stringify(ok.diag), /sami|benali|linkedin\.com/i);
+  } finally {
+    await browser.close();
+  }
+});

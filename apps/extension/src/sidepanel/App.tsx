@@ -3,6 +3,7 @@ import { ArrowRight, Check, X } from "lucide-react";
 import { translate, type Locale, type MessageKey, type Mode, type Persona, type ScrapedProfile } from "@kairo/shared";
 import { supabase } from "../lib/supabase";
 import { getState, patchState } from "../lib/storage";
+import { diagnosticText, maybeAutoResume, nextAutoResume } from "../lib/recovery";
 import { getLinkedInTab, sendToTab } from "../lib/tabs";
 import { nextProfile, resetQueue, type Settings } from "../lib/engine";
 import { ApiError, countToday, fetchPersona, countWeek, generateMessage, logAction, markInvitationSent, rejectProfile, saveEditedMessage } from "../lib/api";
@@ -37,7 +38,7 @@ type Screen =
   | { name: "empty" }
   | { name: "lowMatch"; lowScore: number; connected: number }
   | { name: "dailyCap" }
-  | { name: "paused"; reason: string }
+  | { name: "paused"; reason: string; retryAt?: number | null }
   | { name: "error"; error: string };
 
 /** Maps any error to a user-facing message key: no raw technical detail is displayed. */
@@ -67,6 +68,7 @@ export function App() {
   const bootstrap = useCallback(async () => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) return setScreen({ name: "login" });
+    await maybeAutoResume(); // a temporary pause whose retry time has come is lifted
     const [profile, ps, us, local] = await Promise.all([
       supabase.from("profiles").select("first_name, locale").eq("id", auth.user.id).single(),
       supabase.from("personas").select("*").order("created_at"),
@@ -83,7 +85,7 @@ export function App() {
     const active = list.find((p) => p.id === local.activePersonaId)?.id ?? us.data?.active_persona_id ?? list[0]?.id;
     setActivePersonaId(active);
     if (!list.length) return setScreen({ name: "noPersona" });
-    if (local.pausedReason) return setScreen({ name: "paused", reason: local.pausedReason });
+    if (local.pausedReason) return setScreen({ name: "paused", reason: local.pausedReason, retryAt: nextAutoResume(local) });
     setScreen({ name: "welcome" });
   }, []);
 
@@ -125,7 +127,7 @@ export function App() {
       else if (r.kind === "empty") setScreen({ name: "empty" });
       else if (r.kind === "low_match") setScreen({ name: "lowMatch", lowScore: r.skipped.lowScore, connected: r.skipped.connected });
       else if (r.kind === "daily_cap") setScreen({ name: "dailyCap" });
-      else setScreen({ name: "paused", reason: r.code });
+      else setScreen({ name: "paused", reason: r.code, retryAt: nextAutoResume(await getState()) });
     } catch (e) {
       setScreen({ name: "error", error: errorKey(e) });
     } finally {
@@ -218,8 +220,18 @@ export function App() {
   };
 
   const resume = async () => {
-    await patchState({ pausedReason: undefined });
+    await patchState({ pausedReason: undefined, pausedAt: undefined });
     setScreen({ name: "welcome" });
+  };
+
+  /** Copies the structural diagnostic (no personal data) so it can be sent for a quick fix. */
+  const copyDiag = async () => {
+    try {
+      await navigator.clipboard.writeText(diagnosticText(await getState()));
+      setNotice(t("panel.diagCopied"));
+    } catch {
+      setNotice(t("err.generic"));
+    }
   };
 
   const showControls = !["loading", "login", "noPersona"].includes(screen.name);
@@ -273,6 +285,7 @@ export function App() {
             onSend={send}
             onEdit={(text) => screen.name === "message" && setScreen({ ...screen, text })}
             onResume={resume}
+            onCopyDiag={copyDiag}
             noteMax={noteMax}
             minScore={settings.min_match_score}
             onSearchAgain={async () => {
@@ -299,6 +312,7 @@ function ScreenView({
   onSend,
   onEdit,
   onResume,
+  onCopyDiag,
   onRetry,
   onSearchAgain,
   noteMax,
@@ -314,6 +328,7 @@ function ScreenView({
   onSend: () => void;
   onEdit: (t: string) => void;
   onResume: () => void;
+  onCopyDiag: () => void;
   onRetry: () => void;
   onSearchAgain: () => void;
   noteMax: number;
@@ -453,7 +468,15 @@ function ScreenView({
       return (
         <EmptyState>
           <Bubble>{t("panel.paused", { reason: t(`send.${screen.reason}`) })}</Bubble>
+          {screen.reason === "ui_changed" || screen.reason === "logged_out" ? (
+            <p className="text-center text-xs text-slate-400">
+              {screen.retryAt
+                ? t("panel.autoRetry", { time: new Date(screen.retryAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })
+                : t("panel.noAutoRetry")}
+            </p>
+          ) : null}
           <GhostButton className="w-full" onClick={onResume}>{t("panel.resume")}</GhostButton>
+          <button className="w-full text-center text-xs text-slate-400 underline" onClick={onCopyDiag}>{t("panel.copyDiag")}</button>
         </EmptyState>
       );
 

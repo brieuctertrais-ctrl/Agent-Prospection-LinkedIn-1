@@ -8,6 +8,7 @@ import { checkAcceptances, checkReplies, inWorkingHours, nextDelaySeconds, propo
 import type { Settings } from "../lib/engine";
 import { getAuto, patchAuto } from "../lib/autostate";
 import { getState, patchState, today } from "../lib/storage";
+import { AUTO_RESUME_CODES, maybeAutoResume } from "../lib/recovery";
 import { supabase } from "../lib/supabase";
 import { sleep } from "../linkedin/dom";
 
@@ -57,6 +58,27 @@ async function workTab(): Promise<number> {
   return tab.id!;
 }
 
+const HARD_STOP = ["security_check", "limit_reached", "logged_out"];
+
+/** Pause after a LinkedIn problem. Page-reading problems keep sending switched on (automatic retry). */
+async function stopFor(code: string): Promise<void> {
+  const reason = translate("fr", `send.${code}` as MessageKey);
+  if (AUTO_RESUME_CODES.has(code)) {
+    await patchAuto({ last: "paused", lastCode: code, lastAt: Date.now() });
+    await notify("paused", code === "logged_out" ? "bg.loggedOut" : "bg.pausedTemp", { reason });
+    return;
+  }
+  await patchAuto({ enabled: false, last: "paused", lastCode: code, lastAt: Date.now() });
+  await notify("paused", "bg.paused", { reason });
+}
+
+/** A check page (connections / inbox) could not be read: retried next hour, user told once a day. */
+async function notifyCheckFailed(auto: { checkFailDay?: string }, page: "connections" | "inbox"): Promise<void> {
+  if (auto.checkFailDay === today()) return;
+  await patchAuto({ checkFailDay: today() });
+  await notify("check", "bg.checkFailed", { page: translate("fr", `bg.page.${page}` as MessageKey) });
+}
+
 async function loadSettings(): Promise<Settings | null> {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
@@ -71,8 +93,9 @@ export async function tick(): Promise<void> {
   if (auto.lockUntil && auto.lockUntil > now) return;
   if (auto.nextAt && auto.nextAt > now) return;
 
+  // A temporary page problem lifts itself after a while; a real LinkedIn warning waits for the user.
+  if ((await getState()).pausedReason && !(await maybeAutoResume())) return;
   const state = await getState();
-  if (state.pausedReason) return; // stopped after a LinkedIn warning: only the user can resume
 
   if (auto.day !== today()) auto = await patchAuto({ day: today(), sentToday: 0, failedToday: 0, messagesToday: 0, notified: undefined });
   await patchAuto({ lockUntil: now + STEP_LOCK_MS });
@@ -95,11 +118,8 @@ export async function tick(): Promise<void> {
         lastProposed: a.proposed,
         nextAt: Date.now() + nextDelaySeconds(settings) * 1000,
       });
-      if (a.code && ["security_check", "limit_reached", "ui_changed"].includes(a.code)) {
-        await patchAuto({ enabled: false, last: "paused", lastCode: a.code, lastAt: Date.now() });
-        await notify("paused", "bg.paused", { reason: translate("fr", `send.${a.code}` as MessageKey) });
-        return;
-      }
+      if (a.code && HARD_STOP.includes(a.code)) return stopFor(a.code);
+      if (a.code) await notifyCheckFailed(auto, "connections");
       if (a.accepted > 0 || a.proposed > 0) {
         await notify("accepted", "bg.accepted", { accepted: a.accepted, proposed: a.proposed });
       }
@@ -107,11 +127,8 @@ export async function tick(): Promise<void> {
       // Replies: stop the sequence of anyone who answered, and tell the user.
       await sleep(4000 + Math.random() * 4000);
       const r = await checkReplies(tabId);
-      if (r.code && ["security_check", "limit_reached", "ui_changed"].includes(r.code)) {
-        await patchAuto({ enabled: false, last: "paused", lastCode: r.code, lastAt: Date.now() });
-        await notify("paused", "bg.paused", { reason: translate("fr", `send.${r.code}` as MessageKey) });
-        return;
-      }
+      if (r.code && HARD_STOP.includes(r.code)) return stopFor(r.code);
+      if (r.code) await notifyCheckFailed(auto, "inbox");
       if (r.replied.length) await notify("replied", "bg.replied", { n: r.replied.length, names: r.replied.slice(0, 3).join(", ") });
 
       // Reminders due today (J+3 / J+7 / J+14 by default), to be reviewed in the dashboard.
@@ -141,11 +158,7 @@ export async function tick(): Promise<void> {
       return;
     }
 
-    if (r.kind === "paused") {
-      await patchAuto({ enabled: false, last: "paused", lastCode: r.code, lastAt: Date.now() });
-      await notify("paused", "bg.paused", { reason: translate("fr", `send.${r.code}` as MessageKey) });
-      return;
-    }
+    if (r.kind === "paused") return stopFor(r.code);
 
     // Idle: nothing to do right now.
     const waitMin = { none: 10, outside_hours: 15, quota: 30, paused_by_user: 0 }[r.reason];

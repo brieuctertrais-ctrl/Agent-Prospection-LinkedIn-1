@@ -21,6 +21,12 @@ export interface LocalState {
     }
   >;
   pausedReason?: string;
+  /** When the current pause started (ms). */
+  pausedAt?: number;
+  /** Automatic retries after a temporary pause, per day. */
+  autoResume?: { day: string; count: number };
+  /** Last structural diagnostic (no personal data). */
+  lastDiag?: { at: number; step: string; code: string; detail?: string };
   /** Note length limit detected on the user's LinkedIn account (200 free, 300 Premium). */
   noteMaxChars?: number;
 }

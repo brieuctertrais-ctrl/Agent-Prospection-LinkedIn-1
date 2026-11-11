@@ -23,6 +23,8 @@ export type SendCode =
   | "already_connected"
   | "security_check"
   | "ui_changed"
+  | "logged_out"
+  | "profile_unavailable"
   | "quota_reached"
   | "note_too_long";
 

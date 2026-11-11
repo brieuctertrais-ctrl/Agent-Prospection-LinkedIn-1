@@ -2,7 +2,7 @@ import type { ContentRequest, ContentResponse } from "../lib/protocol";
 import { scrapeProfile, scrapeSearchResults } from "../linkedin/scraper";
 import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
-import { diagnose } from "../linkedin/topcard";
+import { diagnose, pageProblem } from "../linkedin/topcard";
 import { scrapeConnections, scrapeInbox, sendMessage } from "../linkedin/messaging";
 import { findCompanyUrl, scrapeCompany } from "../linkedin/company";
 
@@ -24,11 +24,17 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
       const profile = scrapeProfile();
-      return profile ? { ok: true, type: "PROFILE", profile } : { ok: false, code: "ui_changed", detail: diagnose() };
+      if (profile) return { ok: true, type: "PROFILE", profile };
+      // Give a slow page a little more time before concluding.
+      await sleep(2500);
+      const again = scrapeProfile();
+      if (again) return { ok: true, type: "PROFILE", profile: again };
+      return { ok: false, code: pageProblem() ?? "ui_changed", detail: diagnose() };
     }
     case "SCRAPE_SEARCH_RESULTS": {
       const w = detectAccountWarning();
       if (w) return { ok: false, code: w };
+      if (pageProblem() === "logged_out") return { ok: false, code: "logged_out", detail: diagnose() };
       for (let i = 0; i < 5; i++) {
         window.scrollBy({ top: 800, behavior: "smooth" });
         await sleep(300 + Math.random() * 300);
@@ -39,11 +45,13 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
     case "SCRAPE_CONNECTIONS": {
       const w = detectAccountWarning();
       if (w) return { ok: false, code: w };
+      if (pageProblem() === "logged_out") return { ok: false, code: "logged_out", detail: diagnose() };
       return { ok: true, type: "CONNECTIONS", urls: await scrapeConnections() };
     }
     case "SCRAPE_INBOX": {
       const w = detectAccountWarning();
       if (w) return { ok: false, code: w };
+      if (pageProblem() === "logged_out") return { ok: false, code: "logged_out", detail: diagnose() };
       return { ok: true, type: "INBOX", conversations: await scrapeInbox() };
     }
     case "FIND_COMPANY_URL":
@@ -59,13 +67,15 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       const r = await sendMessage(req.text);
       if (r.ok) return { ok: true, type: "MESSAGE_SENT" };
       const structural = ["ui_changed", "message_button_not_found", "composer_not_found", "send_not_found", "message_not_sent"];
-      return { ok: false, code: r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
+      const problem = r.code === "ui_changed" && r.detail === "profileName" ? pageProblem() : null;
+      return { ok: false, code: problem ?? r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
     case "SEND_INVITATION": {
       const r = await sendInvitation(req.note);
       if (r.ok) return { ok: true, type: "INVITATION_SENT", noteLimit: r.noteLimit };
       const structural = ["ui_changed", "connect_not_found", "note_not_found", "textarea_not_found", "send_not_found", "not_pending"];
-      return { ok: false, code: r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
+      const problem = r.code === "ui_changed" && r.detail === "profileName" ? pageProblem() : null;
+      return { ok: false, code: problem ?? r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
   }
 }
