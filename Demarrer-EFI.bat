@@ -13,6 +13,10 @@ rem Port 3000 already listening? (PowerShell: works whatever the Windows languag
 powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
 if %errorlevel%==0 goto ready
 
+rem Fresh start: clear the dashboard's build cache (avoids "__webpack_modules__[moduleId] is not a function"
+rem after an update). Only the cache is removed; it is rebuilt automatically, no data is touched.
+if exist "apps\web\.next" rmdir /s /q "apps\web\.next"
+
 echo.
 echo  Demarrage du tableau de bord EFI Prospection...
 echo  Une fenetre "EFI Prospection - tableau de bord" va s'ouvrir en bas de l'ecran :
