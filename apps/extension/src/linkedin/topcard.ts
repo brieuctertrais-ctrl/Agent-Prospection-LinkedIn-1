@@ -3,7 +3,7 @@
  * that does not depend on LinkedIn's CSS class names or on a <main> element.
  * Used as a fallback when the CSS selectors of selectors.ts no longer match.
  */
-import { isVisible, text } from "./dom";
+import { isReallyVisible, isVisible, text } from "./dom";
 import { query } from "./dom";
 
 /** "(3) François MATHON | LinkedIn" → "François MATHON" */
@@ -22,7 +22,37 @@ export function findNameElement(name: string): HTMLElement | null {
   for (const el of Array.from(document.querySelectorAll<HTMLElement>("h1, h2, a h1, div[role='heading']"))) {
     if (isVisible(el) && norm(text(el)).startsWith(target)) return el;
   }
-  return null;
+  return largestTextWith(target);
+}
+
+/** Areas that never hold the profile's own name (navigation, side suggestions, chat, dialogs). */
+const NOT_TOP_CARD = "nav, header, aside, footer, [role='navigation'], [role='banner'], [role='complementary'], [role='dialog'], [class*='msg-overlay']";
+
+/**
+ * Layout-independent fallback: whatever tag LinkedIn uses for the name (h1, p, span, div...),
+ * the profile's own name is the most prominent visible text that matches the tab title.
+ * Also looks inside open shadow roots.
+ */
+function largestTextWith(target: string): HTMLElement | null {
+  const roots: ParentNode[] = [document];
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) if (el.shadowRoot) roots.push(el.shadowRoot);
+  let best: HTMLElement | null = null;
+  let bestSize = 0;
+  for (const root of roots) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const v = n.nodeValue ?? "";
+      if (v.length < 2 || v.length > target.length + 60 || !norm(v).startsWith(target)) continue;
+      const el = n.parentElement;
+      if (!el || el.closest(NOT_TOP_CARD) || !isReallyVisible(el)) continue;
+      const size = parseFloat(getComputedStyle(el).fontSize) || 0;
+      if (size > bestSize) {
+        best = el;
+        bestSize = size;
+      }
+    }
+  }
+  return best;
 }
 
 const ACTION_LABEL = /^(se connecter|connect|message|plus|more|suivre|follow|en attente|pending)$/i;

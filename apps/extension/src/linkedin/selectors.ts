@@ -8,7 +8,7 @@
  *
  * SELECTORS_VERSION is logged with every action to correlate breakages.
  */
-export const SELECTORS_VERSION = "2026-11-04";
+export const SELECTORS_VERSION = "2026-11-11";
 
 export interface SelectorDef {
   css: string[];

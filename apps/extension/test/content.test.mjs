@@ -231,3 +231,47 @@ test("unreadable pages are explained: deleted profile, logged out — a normal p
     await browser.close();
   }
 });
+
+test("layout of 2026-11-11: name no longer in a heading (p tag), inside <main>, look-alike names elsewhere", { timeout: 60000 }, async () => {
+  const fixture = readFileSync(new URL("./profile-new-ui.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/in/francois-mathon/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: fixture }));
+    await page.goto("https://www.linkedin.com/in/francois-mathon/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      // Name now in a <p>, the whole page inside <main>, a smaller "sticky bar" copy of the name,
+      // and a suggested profile with a look-alike name in the side column.
+      const h1 = document.querySelector("h1.z1");
+      const p = document.createElement("p");
+      p.className = "k9x2";
+      p.style.fontSize = "24px";
+      p.textContent = "François MATHON";
+      h1.replaceWith(p);
+      const sticky = document.createElement("div");
+      sticky.innerHTML = '<span style="font-size:14px">François MATHON</span>';
+      document.querySelector(".a1b2c3").prepend(sticky);
+      document.querySelector("aside").insertAdjacentHTML("beforeend", '<span style="font-size:30px">François MATHONNET</span>');
+      const main = document.createElement("main");
+      document.body.insertBefore(main, document.querySelector(".a1b2c3"));
+      main.appendChild(document.querySelector(".a1b2c3"));
+    });
+    await page.addScriptTag({ content: code });
+
+    const diag = JSON.parse(await page.evaluate(() => window.kairo.diagnose()));
+    assert.equal(diag.name_el, "P");
+    const profile = await page.evaluate(() => window.kairo.scrapeProfile());
+    assert.equal(profile.full_name, "François MATHON");
+    assert.equal(profile.headline, "DIRECTEUR ADMINISTRATIF ET FINANCIER");
+    assert.equal(profile.location, "Lille, Hauts-de-France, France");
+
+    const note = "Bonjour Monsieur Mathon, test ?";
+    const res = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
+    assert.equal(res.ok, true);
+    assert.equal(await page.evaluate(() => window.__note), note);
+    assert.equal(await page.evaluate(() => window.__wrongClicked ?? false), false);
+  } finally {
+    await browser.close();
+  }
+});
