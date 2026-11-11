@@ -9,6 +9,7 @@ import { complete, sanitizeAiText } from "../_shared/claude.ts";
 import { invitationPrompt, invitationSystem, SHORT_INVITATION_SYSTEM, shortInvitationPrompt } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
 import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
+import { findTells, polish, tellsFeedback } from "../_shared/humanize.ts";
 
 const LINKEDIN_MAX = 300; // absolute cap (LinkedIn Premium); free accounts: 200
 const MAX_ATTEMPTS = 3;
@@ -60,17 +61,26 @@ Deno.serve(async (req) => {
     // Each model call consumes one unit of the user's AI quota.
     let text = "";
     let feedback: string | undefined;
+    let styleRetried = false; // at most one rewrite for style (each call uses AI quota)
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
       const out = short
         ? await complete(SHORT_INVITATION_SYSTEM, shortInvitationPrompt(ctx, profile, body.previous_text, feedback))
         : await complete(invitationSystem(MAX_CHARS), invitationPrompt(ctx, profile, body.previous_text, feedback));
       await recordAiUsage(supabase, usageId, out.usage);
-      text = sanitizeAiText(out.text);
+      text = polish(sanitizeAiText(out.text));
       const chars = [...text].length;
       const lastName = lastNameOf(profile.full_name);
       const greetingValid = greetingOk(text, profile.first_name, lastName);
-      if (chars > 0 && chars <= MAX_CHARS && greetingValid) break;
+      const tells = findTells(text);
+      const lengthOk = chars > 0 && chars <= MAX_CHARS;
+      if (lengthOk && greetingValid && (!tells.length || styleRetried || attempt === MAX_ATTEMPTS - 1)) break;
+      if (lengthOk && greetingValid) {
+        styleRetried = true;
+        feedback = tellsFeedback(tells);
+        text = "";
+        continue;
+      }
       feedback = !greetingValid && chars > 0
         ? `Le message doit commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, » (capitalisation normale du nom). Réécris-le, ${MAX_CHARS - 20} caractères maximum.`
         : `Ton message fait ${chars} caractères : réécris-le en ${MAX_CHARS - 40} caractères maximum, en gardant la formule « Bonjour Monsieur/Madame <Nom>, », l'élément personnalisé et la question finale.`;

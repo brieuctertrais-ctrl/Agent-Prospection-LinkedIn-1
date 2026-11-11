@@ -94,3 +94,6 @@ jobs:
           for f in generate-message score-profile generate-followup suggest-persona; do
             (cd "$f" && deno check index.ts)
           done
+      - name: deno test (message style rules)
+        working-directory: supabase/functions/generate-message
+        run: deno test ../_shared/humanize_test.ts

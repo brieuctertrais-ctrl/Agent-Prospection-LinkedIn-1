@@ -1,6 +1,7 @@
 import type { PersonaContext } from "./supabase.ts";
 import type { Profile as ProfileInput } from "./profile.ts";
 import { lastNameOf } from "./greeting.ts";
+import { HUMAN_STYLE } from "./humanize.ts";
 
 const clip = (s: string | undefined | null, n: number) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
@@ -48,9 +49,11 @@ Règles impératives :
 7. Respecte le modèle et les instructions de rédaction de l'utilisateur s'ils existent (ils priment sur le style, jamais sur la limite de ${max} caractères).
 8. Pas de formules creuses (« j'espère que vous allez bien », « je me permets »…), pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
 
-Exemples du ton attendu :
-- Bonjour Monsieur Benali, en tant que Business Developer chez CashNow, je pense que vous seriez intéressé par notre assistant IA de prospection. Seriez-vous partant pour un test gratuit en échange de vos retours ?
-- Bonjour Madame Martin, je vois que vous êtes chez Arto, une entreprise qui offre une seconde vie au matériel informatique, ce qui est passionnant. Seriez-vous intéressé pour essayer gratuitement notre assistant IA de prospection ?
+Exemples du ton attendu (le ton seulement, pas le sujet) :
+- Bonjour Monsieur Benali, CashNow finance des factures de PME : votre équipe commerciale prospecte sûrement beaucoup sur LinkedIn. Notre assistant IA prépare ces messages à sa place. Un test gratuit en échange de vos retours, ça vous dirait ?
+- Bonjour Madame Martin, chez Arto vous reconditionnez du matériel informatique, et vos clients sont des entreprises. Seriez-vous d'accord pour essayer gratuitement notre assistant IA de prospection ?
+
+${HUMAN_STYLE}
 
 Réponds UNIQUEMENT avec le texte du message, sans aucun commentaire.`;
 
@@ -63,6 +66,8 @@ Règles impératives :
 3. Puis UNE seule phrase simple et cordiale pour se connecter (ex. : « je serais ravi de vous compter parmi mes relations. »). Tu peux citer son poste ou son entreprise si c'est naturel.
 4. Aucune offre, aucun produit, aucune question commerciale, aucun lien, pas d'emoji, pas de signature, pas de guillemets.
 5. Vouvoiement sauf indication contraire.
+
+${HUMAN_STYLE}
 
 Réponds UNIQUEMENT avec le texte de la note.`;
 
@@ -124,6 +129,8 @@ Règles impératives :
 6. Respecte les instructions de suivi de l'utilisateur si elles existent (elles priment sur le style).
 7. N'invente rien qui ne figure pas dans le profil ou l'offre. Pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
 
+${HUMAN_STYLE}
+
 Réponds UNIQUEMENT avec le texte du message.`;
 
 export function followupPrompt(ctx: PersonaContext, profile: ProfileInput, invitation: string, previous?: string, feedback?: string): string {
@@ -150,6 +157,8 @@ Règles impératives :
 5. Termine par UNE question fermée, facile à répondre.
 6. Si c'est la dernière relance, dis-le avec élégance (ex. : « je ne vous relancerai plus ») et laisse la porte ouverte.
 7. Respecte les instructions de suivi de l'utilisateur si elles existent. Pas d'emoji sauf instruction contraire, pas de signature, pas de guillemets autour du message.
+
+${HUMAN_STYLE}
 
 Réponds UNIQUEMENT avec le texte du message.`;
 

@@ -10,6 +10,7 @@ import { complete, sanitizeAiText } from "../_shared/claude.ts";
 import { FOLLOWUP_SYSTEM, followupPrompt, REMINDER_SYSTEM, reminderPrompt } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema } from "../_shared/profile.ts";
 import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
+import { findTells, polish, tellsFeedback } from "../_shared/humanize.ts";
 
 const MIN_CHARS = 200;
 const MAX_CHARS = 1000;
@@ -70,16 +71,24 @@ Deno.serve(async (req) => {
     let text = "";
     let feedback: string | undefined;
     const lastName = lastNameOf(profile.full_name);
+    let styleRetried = false; // at most one rewrite for style (each call uses AI quota)
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
       const out = isReminder
         ? await complete(REMINDER_SYSTEM, reminderPrompt(ctx, profile, history, step, body.kind === "followup_4", body.previous_text, feedback), 2000)
         : await complete(FOLLOWUP_SYSTEM, followupPrompt(ctx, profile, inv.text, body.previous_text, feedback), 3000);
       await recordAiUsage(supabase, usageId, out.usage);
-      text = sanitizeAiText(out.text);
+      text = polish(sanitizeAiText(out.text));
       const chars = [...text].length;
       const ok = chars >= minChars && chars <= maxChars && greetingOk(text, profile.first_name, lastName);
-      if (ok) break;
+      const tells = findTells(text);
+      if (ok && (!tells.length || styleRetried || attempt === MAX_ATTEMPTS - 1)) break;
+      if (ok) {
+        styleRetried = true;
+        feedback = tellsFeedback(tells);
+        text = "";
+        continue;
+      }
       feedback = `Le message doit faire entre ${isReminder ? "200 et 450" : "350 et 800"} caractères (actuellement ${chars}) et commencer par « Bonjour Monsieur ${lastName}, » ou « Bonjour Madame ${lastName}, ». Réécris-le.`;
       if (attempt < MAX_ATTEMPTS - 1 || chars > maxChars || chars < 50) text = "";
     }

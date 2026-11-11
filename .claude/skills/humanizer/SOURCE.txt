@@ -1,0 +1,2 @@
+Source : https://github.com/blader/humanizer (version 4.0.0, commit b48c832), licence MIT.
+Copie telle quelle. Utilise pour les regles d ecriture des messages IA : supabase/functions/_shared/humanize.ts
