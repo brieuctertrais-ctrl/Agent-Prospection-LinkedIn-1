@@ -49,11 +49,21 @@ export async function updateQueuedMessage(queueId: string, text: string) {
   return {};
 }
 
-/** Cancel one pending item (it will not be sent). */
+/** Cancel one pending item (it will not be sent). Cancelling a message ends the sequence for that person. */
 export async function cancelQueueItem(queueId: string) {
   const id = z.string().uuid().safeParse(queueId);
   if (!id.success) return { error: "invalid_request" as const };
   const { supabase, user } = await requireUser();
+  const { data: item } = await supabase
+    .from("action_queue")
+    .select("action_type, prospect_id")
+    .eq("id", id.data)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (item?.action_type === "message" && item.prospect_id) {
+    const { error: stopErr } = await supabase.rpc("stop_sequence", { p_prospects: [item.prospect_id] });
+    if (stopErr) return fail("stop_sequence", stopErr.code);
+  }
   const { error } = await supabase
     .from("action_queue")
     .update({ status: "cancelled", error: "cancelled_by_user" })
@@ -62,6 +72,28 @@ export async function cancelQueueItem(queueId: string) {
     .eq("status", "pending");
   if (error) return fail("cancel_item", error.code);
   revalidatePath("/autopilot");
+  return {};
+}
+
+/** The person answered on LinkedIn: lead marked "replied", every pending message of the sequence cancelled. */
+export async function markReplied(queueId: string) {
+  const id = z.string().uuid().safeParse(queueId);
+  if (!id.success) return { error: "invalid_request" as const };
+  const { supabase, user } = await requireUser();
+  const { data: item } = await supabase
+    .from("action_queue")
+    .select("prospect_id")
+    .eq("id", id.data)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!item?.prospect_id) return { error: "not_found" as const };
+  const { error } = await supabase.rpc("mark_replied", { p_prospects: [item.prospect_id] });
+  if (error) return fail("mark_replied", error.code);
+  // Also covers a lead whose status was already changed by hand: nothing is ever proposed again.
+  const { error: stopErr } = await supabase.rpc("stop_sequence", { p_prospects: [item.prospect_id] });
+  if (stopErr) return fail("stop_sequence", stopErr.code);
+  revalidatePath("/autopilot");
+  revalidatePath("/leads");
   return {};
 }
 
@@ -122,6 +154,7 @@ export async function regenerateMessages(queueIds: string[]) {
       continue;
     }
     if (!campaign?.persona_id) continue;
+    if ((item.payload as { no_note?: boolean } | null)?.no_note) continue; // invitation without a note: nothing to rewrite
 
     const { data: p } = await supabase
       .from("prospects")
@@ -131,10 +164,12 @@ export async function regenerateMessages(queueIds: string[]) {
       .maybeSingle();
     if (!p) continue;
 
+    const { data: s } = await supabase.from("user_settings").select("invitation_note").eq("user_id", user.id).maybeSingle();
     const { data: gen, error } = await supabase.functions.invoke<{ message_id: string }>("generate-message", {
       body: {
         persona_id: campaign.persona_id,
         mode: "proposal",
+        style: s?.invitation_note === "short" ? "short" : "full",
         profile: {
           linkedin_url: p.linkedin_url,
           full_name: p.full_name ?? "",

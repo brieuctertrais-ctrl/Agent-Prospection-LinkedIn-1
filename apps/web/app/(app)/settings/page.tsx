@@ -58,6 +58,26 @@ export default async function SettingsPage() {
               </div>
             ))}
             <div className="sm:col-span-2">
+              <Label htmlFor="invitation_note">{t("settings.invitationNote")}</Label>
+              <Select id="invitation_note" name="invitation_note" defaultValue={s?.invitation_note ?? "full"}>
+                <option value="full">{t("settings.invitationNote.full")}</option>
+                <option value="short">{t("settings.invitationNote.short")}</option>
+                <option value="none">{t("settings.invitationNote.none")}</option>
+              </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="first_message_delay_days">{t("settings.firstMessageDelay")}</Label>
+              <Input
+                id="first_message_delay_days"
+                name="first_message_delay_days"
+                type="number"
+                min={0}
+                max={30}
+                defaultValue={s?.first_message_delay_days ?? 0}
+              />
+              <p className="mt-1 text-xs text-slate-400">{t("settings.firstMessageDelayHelp")}</p>
+            </div>
+            <div className="sm:col-span-2">
               <Label>{t("settings.followupDelays")}</Label>
               <div className="flex gap-3">
                 {[0, 1, 2].map((i) => (

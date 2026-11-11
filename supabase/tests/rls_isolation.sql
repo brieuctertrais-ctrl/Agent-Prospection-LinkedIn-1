@@ -247,3 +247,39 @@ select pg_temp.expect((select count(*) from linkedin_profiles_user) = 0, 'B cann
 select pg_temp.expect_error($$insert into linkedin_profiles_user (user_id) values ('00000000-0000-0000-0000-00000000000a')$$, 'B cannot write onboarding data for A');
 reset role;
 \echo ALL ONBOARDING TESTS PASSED
+
+-- ===== Sequences: invitation style, first-message delay, stopping a sequence =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select invitation_note from user_settings) = 'full' and (select first_message_delay_days from user_settings) = 0, 'defaults: full note, no delay');
+update user_settings set invitation_note = 'none', first_message_delay_days = 3;
+select pg_temp.expect((select invitation_note from user_settings) = 'none', 'A chooses invitations without a note');
+select pg_temp.expect_error($$update user_settings set invitation_note = 'long'$$, 'invalid invitation style rejected');
+select pg_temp.expect_error($$update user_settings set first_message_delay_days = 90$$, 'first-message delay bounded');
+
+insert into prospects (id, user_id, persona_id, linkedin_url, full_name)
+  values ('20000000-0000-0000-0000-0000000000a5', auth.uid(), '10000000-0000-0000-0000-00000000000a', 'https://www.linkedin.com/in/alice5/', 'Ronan Cinq');
+insert into leads (user_id, prospect_id, persona_id, status) values (auth.uid(), '20000000-0000-0000-0000-0000000000a5', '10000000-0000-0000-0000-00000000000a', 'accepted');
+insert into messages (id, user_id, prospect_id, kind, text) values ('30000000-0000-0000-0000-0000000000f5', auth.uid(), '20000000-0000-0000-0000-0000000000a5', 'followup_1', 'Bonjour Monsieur Cinq, merci pour la mise en relation.');
+insert into action_queue (id, user_id, prospect_id, action_type, payload) values
+  ('70000000-0000-0000-0000-0000000000f5', auth.uid(), '20000000-0000-0000-0000-0000000000a5', 'message', '{"needs_approval": true, "kind": "followup_1", "message_id": "30000000-0000-0000-0000-0000000000f5"}'),
+  ('70000000-0000-0000-0000-0000000000f6', auth.uid(), '20000000-0000-0000-0000-0000000000a5', 'message', '{"needs_approval": true, "kind": "followup_2", "message_id": "30000000-0000-0000-0000-0000000000f5"}');
+
+-- B can neither stop A's sequence nor see A's settings
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect(stop_sequence(array['20000000-0000-0000-0000-0000000000a5']::uuid[]) = 0, 'B cannot stop A sequence');
+select pg_temp.expect((select count(*) from user_settings where invitation_note = 'none') = 0, 'B cannot read A settings');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select sequence_stopped_at from leads where prospect_id = '20000000-0000-0000-0000-0000000000a5') is null, 'A sequence untouched by B');
+
+-- A rejects the follow-up: the whole sequence stops for good (other pending messages cancelled too)
+select pg_temp.expect(review_batch(null, array['70000000-0000-0000-0000-0000000000f5']::uuid[]) = 1, 'A rejects the follow-up');
+select pg_temp.expect((select sequence_stopped_at from leads where prospect_id = '20000000-0000-0000-0000-0000000000a5') is not null, 'rejecting a follow-up stops the sequence');
+select pg_temp.expect((select status from action_queue where id = '70000000-0000-0000-0000-0000000000f6') = 'cancelled', 'other pending messages of the sequence cancelled');
+select pg_temp.expect((select count(*) from exclusion_list where linkedin_url = 'https://www.linkedin.com/in/alice5/') = 0, 'stopping a sequence does not exclude the contact');
+reset role;
+set role anon;
+select pg_temp.expect_error($$select stop_sequence(array['20000000-0000-0000-0000-0000000000a5']::uuid[])$$, 'anon cannot call stop_sequence');
+reset role;
+\echo ALL SEQUENCE TESTS PASSED

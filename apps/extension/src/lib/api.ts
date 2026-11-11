@@ -28,8 +28,9 @@ export const generateMessage = (
   previous_text?: string,
   max_chars?: number,
   mode: "approve" | "proposal" = "approve",
+  style: "full" | "short" | "none" = "full",
 ) =>
-  invoke<GenerateMessageResponse>("generate-message", { persona_id, profile, previous_text, mode, ...(max_chars ? { max_chars } : {}) });
+  invoke<GenerateMessageResponse>("generate-message", { persona_id, profile, previous_text, mode, style, ...(max_chars ? { max_chars } : {}) });
 
 export const scoreProfile = (persona_id: string, profile: ScrapedProfile) =>
   invoke<ScoreProfileResponse>("score-profile", { persona_id, profile });
@@ -92,7 +93,7 @@ export async function saveEditedMessage(messageId: string, text: string) {
 }
 
 export async function markInvitationSent(leadId: string, prospectId: string, linkedinUrl: string) {
-  await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("id", leadId);
+  await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent", invited_at: new Date().toISOString() }).eq("id", leadId);
   await logAction("invitation", "success", {}, { prospect_id: prospectId, linkedin_url: linkedinUrl });
 }
 

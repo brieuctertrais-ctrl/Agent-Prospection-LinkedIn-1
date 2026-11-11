@@ -6,7 +6,7 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 import { errorResponse, HttpError } from "../_shared/errors.ts";
 import { consumeAiQuota, limitByIp, loadPersonaContext, recordAiUsage, userClient } from "../_shared/supabase.ts";
 import { complete, sanitizeAiText } from "../_shared/claude.ts";
-import { invitationPrompt, invitationSystem } from "../_shared/prompts.ts";
+import { invitationPrompt, invitationSystem, SHORT_INVITATION_SYSTEM, shortInvitationPrompt } from "../_shared/prompts.ts";
 import { parseBody, ProfileSchema, upsertProspect } from "../_shared/profile.ts";
 import { greetingOk, lastNameOf } from "../_shared/greeting.ts";
 
@@ -22,7 +22,10 @@ const BodySchema = z.object({
   // "approve": the user approved the profile (copilot). "proposal": autopilot batch, reviewed later
   // in the dashboard — no decision and no lead are created until the user approves.
   mode: z.enum(["approve", "proposal"]).default("approve"),
+  // Invitation style chosen in Settings: personalised note, short greeting only, or no note at all.
+  style: z.enum(["full", "short", "none"]).default("full"),
 });
+const SHORT_MAX = 140;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -45,14 +48,23 @@ Deno.serve(async (req) => {
       if (decErr) throw new Error(`decision_failed: ${decErr.code}`);
     }
 
+    // No note: nothing to generate (no AI quota used). Only for autopilot proposals.
+    if (body.style === "none") {
+      if (body.mode !== "proposal") throw new HttpError(422, "invalid_request");
+      return json({ prospect_id: prospectId, lead_id: null, message_id: null, text: "", chars: 0, version: 0 });
+    }
+    const short = body.style === "short";
+
     // Generate; if over the LinkedIn limit, ask the model to shorten. Never return more than MAX_CHARS.
-    const MAX_CHARS = body.max_chars;
+    const MAX_CHARS = short ? Math.min(SHORT_MAX, body.max_chars) : body.max_chars;
     // Each model call consumes one unit of the user's AI quota.
     let text = "";
     let feedback: string | undefined;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const usageId = await consumeAiQuota(supabase, "generate");
-      const out = await complete(invitationSystem(MAX_CHARS), invitationPrompt(ctx, profile, body.previous_text, feedback));
+      const out = short
+        ? await complete(SHORT_INVITATION_SYSTEM, shortInvitationPrompt(ctx, profile, body.previous_text, feedback))
+        : await complete(invitationSystem(MAX_CHARS), invitationPrompt(ctx, profile, body.previous_text, feedback));
       await recordAiUsage(supabase, usageId, out.usage);
       text = sanitizeAiText(out.text);
       const chars = [...text].length;

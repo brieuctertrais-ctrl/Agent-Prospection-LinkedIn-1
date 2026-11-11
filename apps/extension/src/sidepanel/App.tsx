@@ -156,7 +156,7 @@ export function App() {
         profile,
         text: r.text,
         originalText: r.text,
-        messageId: r.message_id,
+        messageId: r.message_id ?? "", // copilot always writes a note
         leadId: r.lead_id ?? "",
         prospectId: r.prospect_id,
         sendState: "idle",
@@ -172,7 +172,7 @@ export function App() {
     setScreen({ ...current, regenerating: true });
     try {
       const r = await generateMessage(persona.id, current.profile, current.text, noteMax);
-      setScreen({ ...current, text: r.text, originalText: r.text, messageId: r.message_id, regenerating: false, sendState: "idle", sendError: undefined });
+      setScreen({ ...current, text: r.text, originalText: r.text, messageId: r.message_id ?? "", regenerating: false, sendState: "idle", sendError: undefined });
     } catch (e) {
       setScreen({ ...current, regenerating: false, sendError: t(errorKey(e)) });
     }

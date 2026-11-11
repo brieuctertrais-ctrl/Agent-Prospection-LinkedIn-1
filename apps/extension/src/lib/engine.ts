@@ -21,6 +21,10 @@ export interface Settings {
   work_days?: number[];
   timezone?: string;
   autopilot_warning_accepted_at?: string | null;
+  /** Autopilot invitations: personalised note, short greeting only, or no note. */
+  invitation_note?: "full" | "short" | "none";
+  /** Minimum days between the invitation and the first (personalised) message. */
+  first_message_delay_days?: number;
 }
 
 export type NextResult =

@@ -14,6 +14,8 @@ export function detectAccountWarning(): SendCode | null {
 /**
  * Clicks Connect → Add a note → pastes the note → Send, then verifies that the
  * profile switched to "Pending". Never retries or works around LinkedIn limits.
+ * An EMPTY note (Settings: "invitations without a note") clicks "Send without a note" instead —
+ * the only case where that button is ever used.
  */
 export async function sendInvitation(note: string): Promise<InviteResult> {
   if ([...note].length > 300) return { ok: false, code: "ui_changed", detail: "note_too_long" };
@@ -27,7 +29,8 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   if (isPending(card)) return { ok: false, code: "already_connected" };
 
   // The invitation modal may still be open (note field shown) from a previous attempt: reuse it.
-  const reuse = inviteDialog();
+  const withoutNote = !note.trim();
+  const reuse = withoutNote ? null : inviteDialog();
   const reuseNote = reuse ? deepQueryAll<HTMLTextAreaElement>("textarea", reuse).find(isReallyVisible) : undefined;
   if (!reuseNote) {
     // 1. Connect (directly, or through the "More" menu) — always the button of THIS profile.
@@ -45,8 +48,19 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
     await humanPause();
 
     const dialog = await waitFor(() => inviteDialog(), 6000);
-    if (!dialog) return { ok: false, code: "note_not_found", detail: "dialog" };
+    if (!dialog) {
+      // Some layouts send a note-less invitation straight away, without any modal.
+      if (withoutNote) return verifySent(name);
+      return { ok: false, code: "note_not_found", detail: "dialog" };
+    }
     if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || warningIn(dialog, WARNING_PATTERNS.weeklyLimit)) return { ok: false, code: "limit_reached" };
+
+    if (withoutNote) {
+      const plain = await waitFor(() => deepButton(inviteDialog() ?? dialog, SEND_WITHOUT_NOTE), 4000);
+      if (!plain) return { ok: false, code: "send_not_found", detail: "without_note" };
+      plain.click();
+      return verifySent(name);
+    }
 
     // 2. Add a note (exact label match: never "Envoyer sans note")
     const addNote = await waitFor(() => deepButton(inviteDialog() ?? dialog, ADD_NOTE) ?? query<HTMLElement>("addNoteButton"), 4000);
@@ -81,8 +95,11 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   }, 4000);
   if (!send) return { ok: false, code: "send_not_found" };
   send.click();
+  return verifySent(name, limit ?? undefined);
+}
 
-  // 5. Verify
+/** Waits for the profile to show "Pending" (or a LinkedIn limit warning). */
+async function verifySent(name: string, limit?: number): Promise<InviteResult> {
   const done = await waitFor(() => {
     if (dialogMatches(WARNING_PATTERNS.weeklyLimit) || deepQueryAll<HTMLElement>(DIALOG_SEL).some((d) => warningIn(d, WARNING_PATTERNS.weeklyLimit))) return "limit";
     if (query("pendingButton") || isPending(findTopCard(findNameElement(name)))) return "pending";
@@ -90,7 +107,7 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   }, 8000, 300);
   if (done === "limit") return { ok: false, code: "limit_reached" };
   if (done !== "pending") return { ok: false, code: "not_pending" };
-  return { ok: true, noteLimit: limit ?? undefined };
+  return { ok: true, noteLimit: limit };
 }
 
 const lastName = (name: string) => name.trim().split(/\s+/).slice(-1)[0]?.toLowerCase() ?? "";
@@ -145,6 +162,7 @@ function isPending(card: HTMLElement | null): boolean {
 
 const DIALOG_SEL = "[role='dialog'], [role='alertdialog'], dialog[open], .artdeco-modal";
 const ADD_NOTE = ["Ajouter une note", "Add a note"];
+const SEND_WITHOUT_NOTE = ["Envoyer sans note", "Send without a note", "Send without note"];
 const SEND = ["Envoyer", "Send", "Envoyer l’invitation", "Envoyer l'invitation", "Send invitation", "Send now", "Envoyer maintenant"];
 
 /** The invitation modal (light DOM or shadow DOM), not another overlay such as messaging. */

@@ -54,6 +54,28 @@ Exemples du ton attendu :
 
 Réponds UNIQUEMENT avec le texte du message, sans aucun commentaire.`;
 
+/** Short invitation note: greeting + one courteous sentence, no pitch (the offer comes in the first message). */
+export const SHORT_INVITATION_SYSTEM = `Tu rédiges une note d'invitation LinkedIn TRÈS COURTE, sans aucune présentation d'offre : l'offre sera présentée plus tard, dans un message séparé.
+
+Règles impératives :
+1. Entre 40 et 140 caractères, espaces compris.
+2. Commence exactement par « Bonjour Monsieur <Nom>, » ou « Bonjour Madame <Nom>, » (Nom = nom de famille, capitalisation normale). Civilité déduite du prénom ; en cas de doute (Camille, Dominique, Claude…), « Bonjour <Prénom> <Nom>, ». Jamais le prénom seul.
+3. Puis UNE seule phrase simple et cordiale pour se connecter (ex. : « je serais ravi de vous compter parmi mes relations. »). Tu peux citer son poste ou son entreprise si c'est naturel.
+4. Aucune offre, aucun produit, aucune question commerciale, aucun lien, pas d'emoji, pas de signature, pas de guillemets.
+5. Vouvoiement sauf indication contraire.
+
+Réponds UNIQUEMENT avec le texte de la note.`;
+
+export function shortInvitationPrompt(ctx: PersonaContext, profile: ProfileInput, previous?: string, feedback?: string): string {
+  return [
+    `## Adresse : ${ctx.persona.formal_address ? "vouvoiement" : "tutoiement"}`,
+    `## Prospect\nNom : ${clip(profile.full_name, 100)}\nPrénom : ${clip(profile.first_name, 50)}\nNom de famille : ${clip(lastNameOf(profile.full_name), 80) || "(inconnu)"}\nTitre : ${clip(profile.headline, 160)}\nEntreprise : ${clip(profile.company, 100)}`,
+    previous ? `## Version précédente (propose une formulation différente)\n${clip(previous, 300)}` : "",
+    feedback ? `## Correction demandée\n${feedback}` : "",
+    "Rédige maintenant la note courte.",
+  ].filter(Boolean).join("\n\n");
+}
+
 export function invitationPrompt(ctx: PersonaContext, profile: ProfileInput, previous?: string, feedback?: string): string {
   return [
     `## Expéditeur\n${ctx.sender.full_name || ctx.sender.first_name || "(inconnu)"}`,
@@ -96,7 +118,7 @@ export const FOLLOWUP_SYSTEM = `Tu es un expert en prospection B2B sur LinkedIn.
 Règles impératives :
 1. Entre 350 et 800 caractères, en 2 ou 3 courts paragraphes séparés par une ligne vide.
 2. Commence exactement par « Bonjour Monsieur <Nom>, » ou « Bonjour Madame <Nom>, » (mêmes règles que pour l'invitation : capitalisation normale du nom, civilité déduite du prénom, « Bonjour <Prénom> <Nom>, » en cas de doute). Vouvoiement.
-3. Remercie brièvement pour la mise en relation (une demi-phrase, sans flagornerie), puis enchaîne sans répéter la note d'invitation mot pour mot.
+3. Remercie brièvement pour la mise en relation (une demi-phrase, sans flagornerie). Si la note d'invitation présentait déjà l'offre, ne la répète pas mot pour mot. Si l'invitation était sans note ou une simple salutation, ce message est la PREMIÈRE présentation de l'offre : présente-la clairement et de façon percutante.
 4. Développe l'intérêt concret pour SON entreprise (activité, sites, enjeu tiré du profil) et les bénéfices de l'offre, avec l'argument différenciant décrit dans l'offre et les instructions.
 5. Termine par UNE proposition d'action simple et facile à accepter (ex. échange de 10 minutes, avec deux créneaux possibles formulés de façon générique : « en début ou en fin de semaine »).
 6. Respecte les instructions de suivi de l'utilisateur si elles existent (elles priment sur le style).
@@ -110,7 +132,7 @@ export function followupPrompt(ctx: PersonaContext, profile: ProfileInput, invit
     `## Offre\n${formatOffer(ctx)}`,
     ctx.copywriting?.instructions ? `## Instructions générales de rédaction\n${clip(ctx.copywriting.instructions, 1500)}` : "",
     ctx.copywriting?.followup_instructions ? `## Instructions pour le message de suivi\n${clip(ctx.copywriting.followup_instructions, 1500)}` : "",
-    `## Note d'invitation déjà envoyée (et acceptée)\n${clip(invitation, 400) || "(inconnue)"}`,
+    `## Note d'invitation déjà envoyée (et acceptée)\n${clip(invitation, 400) || "(aucune : invitation envoyée sans note — ce message est la première présentation de l'offre)"}`,
     `## Profil du prospect\n${formatProfile(profile)}`,
     previous ? `## Version précédente (propose une version nettement différente)\n${clip(previous, 1200)}` : "",
     feedback ? `## Correction demandée\n${feedback}` : "",

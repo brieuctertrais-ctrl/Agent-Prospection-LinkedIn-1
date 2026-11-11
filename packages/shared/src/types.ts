@@ -74,7 +74,8 @@ export interface GenerateMessageResponse {
   prospect_id: string;
   /** null in "proposal" mode (autopilot batch awaiting review). */
   lead_id: string | null;
-  message_id: string;
+  /** null when the invitation is sent without a note (autopilot setting). */
+  message_id: string | null;
   text: string;
   chars: number;
   version: number;

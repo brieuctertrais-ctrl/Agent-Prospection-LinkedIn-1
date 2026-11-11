@@ -1,8 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
-import { ExternalLink, RefreshCw, X } from "lucide-react";
+import { ExternalLink, MessageCircleReply, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cancelQueueItem, regenerateMessages, reviewBatch, updateQueuedMessage } from "./actions";
+import { cancelQueueItem, markReplied, regenerateMessages, reviewBatch, updateQueuedMessage } from "./actions";
 
 export interface QueueItem {
   id: string;
@@ -11,6 +11,8 @@ export interface QueueItem {
   msgKind: string | null;
   status: string;
   needsApproval: boolean;
+  /** Invitation sent without a note (Settings). */
+  noNote: boolean;
   error: string | null;
   message: string;
   name: string;
@@ -24,7 +26,8 @@ export interface QueueItem {
 
 type Labels = Record<
   | "selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota"
-  | "kindInvitation" | "kindMessage" | "followup_1" | "followup_2" | "followup_3" | "followup_4",
+  | "kindInvitation" | "kindMessage" | "followup_1" | "followup_2" | "followup_3" | "followup_4"
+  | "replied" | "repliedHelp" | "noNote",
   string
 >;
 
@@ -85,6 +88,7 @@ export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: 
           checked={selected.includes(item.id)}
           onToggle={() => toggle(item.id)}
           onCancel={() => run(() => cancelQueueItem(item.id))}
+          onReplied={() => run(() => markReplied(item.id))}
           busy={pending}
         />
       ))}
@@ -99,6 +103,7 @@ function Row({
   checked,
   onToggle,
   onCancel,
+  onReplied,
   busy,
 }: {
   item: QueueItem;
@@ -107,6 +112,7 @@ function Row({
   checked: boolean;
   onToggle: () => void;
   onCancel: () => void;
+  onReplied: () => void;
   busy: boolean;
 }) {
   const [text, setText] = useState(item.message);
@@ -118,7 +124,7 @@ function Row({
   }
   const [saving, start] = useTransition();
   const [saved, setSaved] = useState(false);
-  const editable = mode !== "readonly";
+  const editable = mode !== "readonly" && !item.noNote;
   const chars = [...text].length;
   const max = item.kind === "message" ? 1000 : 300;
 
@@ -149,7 +155,9 @@ function Row({
         {item.error && <p className="mt-1 text-xs text-red-300">{item.error}</p>}
       </div>
       <div className="flex-1 space-y-2">
-        {editable ? (
+        {item.noNote ? (
+          <p className="rounded-lg border border-white/10 p-3 text-sm italic text-slate-400">{labels.noNote}</p>
+        ) : editable ? (
           <textarea
             value={text}
             maxLength={max}
@@ -194,6 +202,11 @@ function Row({
               >
                 <RefreshCw className={`h-4 w-4 ${saving ? "animate-spin" : ""}`} /> {labels.regenerate}
               </Button>
+              {item.kind === "message" && (
+                <Button size="sm" variant="ghost" disabled={busy} onClick={onReplied} title={labels.repliedHelp}>
+                  <MessageCircleReply className="h-4 w-4" /> {labels.replied}
+                </Button>
+              )}
               <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel} title={labels.cancel}>
                 <X className="h-4 w-4" /> {labels.cancel}
               </Button>

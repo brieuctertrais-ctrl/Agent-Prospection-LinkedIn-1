@@ -275,3 +275,22 @@ test("layout of 2026-11-11: name no longer in a heading (p tag), inside <main>, 
     await browser.close();
   }
 });
+
+test("invitation without a note (setting): 'Send without a note' is clicked, never 'Add a note'", { timeout: 60000 }, async () => {
+  const fixture = readFileSync(new URL("./profile-new-ui.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => r.abort());
+    await page.route("https://www.linkedin.com/in/francois-mathon/", (r) => r.fulfill({ contentType: "text/html; charset=utf-8", body: fixture }));
+    await page.goto("https://www.linkedin.com/in/francois-mathon/", { waitUntil: "domcontentloaded" });
+    await page.addScriptTag({ content: code });
+    const res = await page.evaluate(() => window.kairo.sendInvitation(""));
+    assert.equal(res.ok, true);
+    assert.equal(await page.evaluate(() => window.__sentWithoutNote ?? false), true);
+    assert.equal(await page.evaluate(() => window.__note), undefined);
+    assert.equal(await page.evaluate(() => window.__wrongClicked ?? false), false);
+  } finally {
+    await browser.close();
+  }
+});

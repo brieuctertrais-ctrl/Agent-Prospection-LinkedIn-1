@@ -81,13 +81,16 @@ export async function prepareBatch(opts: {
     if (r.kind === "paused") return { prepared, end: "paused", code: r.code };
 
     try {
-      const msg = await generateMessage(opts.persona.id, r.profile, undefined, opts.noteMax, "proposal");
+      const style = opts.settings.invitation_note ?? "full";
+      const msg = await generateMessage(opts.persona.id, r.profile, undefined, opts.noteMax, "proposal", style);
       const { error: qErr } = await supabase.from("action_queue").insert({
         user_id: uid,
         campaign_id: campaign.id,
         prospect_id: msg.prospect_id,
         action_type: "invitation",
-        payload: { needs_approval: true, message_id: msg.message_id, score: r.score ?? null },
+        payload: msg.message_id
+          ? { needs_approval: true, message_id: msg.message_id, score: r.score ?? null }
+          : { needs_approval: true, no_note: true, score: r.score ?? null },
       });
       if (qErr) return { prepared, end: "error", code: "generic" };
       await logAction("batch_prepare", "success", { campaign_id: campaign.id }, { prospect_id: msg.prospect_id, linkedin_url: r.profile.linkedin_url });
@@ -211,11 +214,13 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
 
   const isMessage = item.action_type === "message";
   const action = isMessage ? "message" : "invitation";
-  const messageId = (item.payload as { message_id?: string })?.message_id;
-  const [{ data: prospect }, { data: message }] = await Promise.all([
+  const { message_id: messageId, no_note: noNote } = (item.payload ?? {}) as { message_id?: string; no_note?: boolean };
+  const [{ data: prospect }, { data: found }] = await Promise.all([
     supabase.from("prospects").select("linkedin_url").eq("id", item.prospect_id).single(),
-    supabase.from("messages").select("text").eq("id", messageId ?? "").single(),
+    messageId ? supabase.from("messages").select("text").eq("id", messageId).single() : Promise.resolve({ data: null }),
   ]);
+  // Invitation without a note (Settings): an empty note makes the content script use "Send without a note".
+  const message = found ?? (!isMessage && noNote ? { text: "" } : null);
   const fail = async (code: string) => {
     await supabase.from("action_queue").update({ status: "failed", error: code.slice(0, 200), attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
     await logAction(action, "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
@@ -247,7 +252,10 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
     if (isMessage) {
       await supabase.from("leads").update({ last_action: "followup_1_sent" }).eq("prospect_id", item.prospect_id);
     } else {
-      await supabase.from("leads").update({ status: "invitation_sent", last_action: "invitation_sent" }).eq("prospect_id", item.prospect_id);
+      await supabase
+        .from("leads")
+        .update({ status: "invitation_sent", last_action: "invitation_sent", invited_at: new Date().toISOString() })
+        .eq("prospect_id", item.prospect_id);
     }
     await logAction(action, "success", { autopilot: true, campaign_id: item.campaign_id }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
     return { kind: "sent", action, noteLimit: res.type === "INVITATION_SENT" ? res.noteLimit : undefined };
@@ -311,15 +319,21 @@ export async function checkAcceptances(tabId: number, maxProposals = 10): Promis
 /** Prepares follow-up #1 for accepted leads that don't have one yet. */
 export async function proposeFollowups(max = 10): Promise<number> {
   const uid = await userId();
+  const { data: settings } = await supabase.from("user_settings").select("first_message_delay_days").eq("user_id", uid).maybeSingle();
+  const delayMs = Math.max(0, Number(settings?.first_message_delay_days ?? 0)) * 86_400_000;
   const { data: leads } = await supabase
     .from("leads")
-    .select("prospect_id")
+    .select("prospect_id, invited_at, accepted_at")
     .eq("status", "accepted")
+    .is("sequence_stopped_at", null) // rejected / stopped in the dashboard: never proposed again
     .order("accepted_at", { ascending: true })
     .limit(50);
   let proposed = 0;
   for (const l of leads ?? []) {
     if (proposed >= max) break;
+    // First personalised message only N days after the invitation (Settings), even if accepted sooner.
+    const since = new Date(l.invited_at ?? l.accepted_at ?? 0).getTime();
+    if (delayMs && Date.now() < since + delayMs) continue;
     const { count } = await supabase
       .from("action_queue")
       .select("id", { count: "exact", head: true })
@@ -395,7 +409,7 @@ export async function checkReplies(tabId: number): Promise<{ replied: string[]; 
 export async function proposeReminders(settings: Settings, max = 10): Promise<number> {
   const uid = await userId();
   const delays = settings.followup_delays?.length === 3 ? settings.followup_delays : [3, 7, 14];
-  const { data: leads } = await supabase.from("leads").select("prospect_id").eq("status", "accepted").limit(200);
+  const { data: leads } = await supabase.from("leads").select("prospect_id").eq("status", "accepted").is("sequence_stopped_at", null).limit(200);
   const ids = (leads ?? []).map((l) => l.prospect_id);
   if (!ids.length) return 0;
 

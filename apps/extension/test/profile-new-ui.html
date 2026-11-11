@@ -37,7 +37,11 @@
     d.innerHTML = '<h2>Ajouter une note à votre invitation ?</h2><p>Personnalisez l’invitation que vous envoyez à François MATHON.</p>'
       + '<button id="add">Ajouter une note</button><button id="nonote">Envoyer sans note</button>';
     shadow.appendChild(d);
-    d.querySelector('#nonote').addEventListener('click', () => { window.__sentWithoutNote = true; });
+    d.querySelector('#nonote').addEventListener('click', () => {
+      window.__sentWithoutNote = true;
+      d.remove();
+      document.getElementById('actions').innerHTML = '<button>En attente</button><a href="#">Message</a>';
+    });
     d.querySelector('#add').addEventListener('click', () => {
       d.innerHTML = '<h2>Ajouter une note à votre invitation</h2><textarea maxlength="200"></textarea><span>0/200</span><button>Annuler</button><button id="send" disabled>Envoyer</button>';
       const ta = d.querySelector('textarea'); const send = d.querySelector('#send');

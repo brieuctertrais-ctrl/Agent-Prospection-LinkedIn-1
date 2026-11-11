@@ -16,6 +16,8 @@ const SettingsSchema = z
     min_match_score: int(0, 100),
     purge_rejected_after_months: int(1, 36),
     min_delay_seconds: int(30, 600),
+    invitation_note: z.enum(["full", "short", "none"]),
+    first_message_delay_days: int(0, 30),
     delay_1: int(1, 60),
     delay_2: int(2, 90),
     delay_3: int(3, 120),
