@@ -75,6 +75,35 @@ export async function cancelQueueItem(queueId: string) {
   return {};
 }
 
+/**
+ * Puts a failed item back in the sending queue (e.g. after an extension fix). It stays approved:
+ * the user had validated it. Before sending a message the extension still checks that the person
+ * has not replied in the meantime. Limited to 5 attempts per item.
+ */
+export async function retryQueueItem(queueId: string) {
+  const id = z.string().uuid().safeParse(queueId);
+  if (!id.success) return { error: "invalid_request" as const };
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("action_queue")
+    .update({ status: "pending", error: null, scheduled_at: new Date().toISOString() })
+    .eq("id", id.data)
+    .eq("user_id", user.id)
+    .eq("status", "failed")
+    .lt("attempts", 5)
+    .select("id");
+  if (error?.code === "23505") {
+    // A newer version of this message is already waiting for review / sending: drop the old one.
+    await supabase.from("action_queue").update({ status: "cancelled", error: "superseded" }).eq("id", id.data).eq("user_id", user.id).eq("status", "failed");
+    revalidatePath("/autopilot");
+    return {};
+  }
+  if (error) return fail("retry_item", error.code);
+  if (!data?.length) return { error: "not_found" as const };
+  revalidatePath("/autopilot");
+  return {};
+}
+
 /** The person answered on LinkedIn: lead marked "replied", every pending message of the sequence cancelled. */
 export async function markReplied(queueId: string) {
   const id = z.string().uuid().safeParse(queueId);

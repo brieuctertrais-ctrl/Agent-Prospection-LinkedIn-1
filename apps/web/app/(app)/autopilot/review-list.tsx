@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { ExternalLink, MessageCircleReply, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cancelQueueItem, markReplied, regenerateMessages, reviewBatch, updateQueuedMessage } from "./actions";
+import { cancelQueueItem, markReplied, regenerateMessages, retryQueueItem, reviewBatch, updateQueuedMessage } from "./actions";
 
 export interface QueueItem {
   id: string;
@@ -27,7 +27,7 @@ export interface QueueItem {
 type Labels = Record<
   | "selectAll" | "approve" | "reject" | "cancel" | "save" | "score" | "error" | "regenerate" | "regenerating" | "quota"
   | "kindInvitation" | "kindMessage" | "followup_1" | "followup_2" | "followup_3" | "followup_4"
-  | "replied" | "repliedHelp" | "noNote",
+  | "replied" | "repliedHelp" | "noNote" | "retry" | "retryHelp",
   string
 >;
 
@@ -89,6 +89,7 @@ export function ReviewList({ items, mode, labels }: { items: QueueItem[]; mode: 
           onToggle={() => toggle(item.id)}
           onCancel={() => run(() => cancelQueueItem(item.id))}
           onReplied={() => run(() => markReplied(item.id))}
+          onRetryItem={() => run(() => retryQueueItem(item.id))}
           busy={pending}
         />
       ))}
@@ -104,6 +105,7 @@ function Row({
   onToggle,
   onCancel,
   onReplied,
+  onRetryItem,
   busy,
 }: {
   item: QueueItem;
@@ -113,6 +115,7 @@ function Row({
   onToggle: () => void;
   onCancel: () => void;
   onReplied: () => void;
+  onRetryItem: () => void;
   busy: boolean;
 }) {
   const [text, setText] = useState(item.message);
@@ -153,6 +156,18 @@ function Row({
         <p className="text-xs text-slate-400">{[item.company, item.location].filter(Boolean).join(" · ")}</p>
         <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{item.kind === "message" ? (labels[(item.msgKind ?? "") as keyof Labels] ?? labels.kindMessage) : labels.kindInvitation}</p>
         {item.error && <p className="mt-1 text-xs text-red-300">{item.error}</p>}
+        {item.status === "failed" && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" disabled={busy} onClick={onRetryItem} title={labels.retryHelp}>
+              <RefreshCw className="h-4 w-4" /> {labels.retry}
+            </Button>
+            {item.kind === "message" && (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={onReplied} title={labels.repliedHelp}>
+                <MessageCircleReply className="h-4 w-4" /> {labels.replied}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex-1 space-y-2">
         {item.noNote ? (

@@ -76,6 +76,8 @@ export default async function AutopilotPage() {
     replied: t("apw.replied"),
     repliedHelp: t("apw.repliedHelp"),
     noNote: t("apw.noNote"),
+    retry: t("apw.retry"),
+    retryHelp: t("apw.retryHelp"),
   };
 
   return (

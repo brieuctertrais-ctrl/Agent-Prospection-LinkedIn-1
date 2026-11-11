@@ -221,9 +221,10 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   ]);
   // Invitation without a note (Settings): an empty note makes the content script use "Send without a note".
   const message = found ?? (!isMessage && noNote ? { text: "" } : null);
-  const fail = async (code: string) => {
+  const fail = async (code: string, detail?: string) => {
     await supabase.from("action_queue").update({ status: "failed", error: code.slice(0, 200), attempts: (item.attempts ?? 0) + 1 }).eq("id", item.id);
-    await logAction(action, "failure", { code, autopilot: true }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
+    // detail = structural page diagnostic only (which elements were found), never personal data
+    await logAction(action, "failure", { code, detail: detail?.slice(0, 600), autopilot: true, build: __BUILD_STAMP__ }, { prospect_id: item.prospect_id, linkedin_url: prospect?.linkedin_url });
   };
   if (!prospect || !message) {
     await fail("missing_data");
@@ -269,7 +270,7 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
     await logAction("reply_detected", "success", { before_send: true }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
     return { kind: "failed", code: "replied" };
   }
-  await fail(res.code);
+  await fail(res.code, res.detail);
   if (PAUSE_CODES.has(res.code)) {
     // LinkedIn warning, limit or check: stop everything, the user resumes manually (never worked around).
     // Temporary page problems pause locally and lift themselves (recovery.ts); real warnings also pause the campaign.
