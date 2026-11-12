@@ -4,12 +4,14 @@ import { safePhotoUrl, safeProfileUrl } from "@/lib/leads";
 import { Card } from "@/components/ui/card";
 import { ReviewList, type QueueItem } from "./review-list";
 import { PauseButton } from "./pause-button";
+import { HealthCard, type HealthLine } from "./health-card";
 
 export default async function AutopilotPage() {
   const { supabase } = await requireUser();
   const { t } = await getT();
 
-  const [{ data: rows }, { data: campaigns }] = await Promise.all([
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const [{ data: rows }, { data: campaigns }, { data: problems }] = await Promise.all([
     supabase
       .from("action_queue")
       .select("id, action_type, status, payload, error, updated_at, prospect:prospects(full_name, headline, company, location, linkedin_url, photo_url, score, score_reason)")
@@ -17,7 +19,44 @@ export default async function AutopilotPage() {
       .order("created_at", { ascending: false })
       .limit(300),
     supabase.from("campaigns").select("id, status, paused_reason").in("status", ["running", "paused"]).order("updated_at", { ascending: false }).limit(1),
+    // Own rows only (RLS). No profile URL is read: only the action, the date and the structural details.
+    supabase
+      .from("action_logs")
+      .select("created_at, action_type, result, details")
+      .gte("created_at", since)
+      .or("result.eq.failure,action_type.eq.pause")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
+
+  // Health: failures grouped by cause + a copyable structural report (whitelisted keys only).
+  const IGNORED = new Set(["already_connected", "replied", "not_connected", "quota_reached"]);
+  const counts = new Map<string, number>();
+  const entries: Record<string, unknown>[] = [];
+  for (const p of problems ?? []) {
+    const d = (p.details ?? {}) as Record<string, unknown>;
+    const code = typeof d.code === "string" ? d.code.slice(0, 60) : "unknown";
+    if (IGNORED.has(code)) continue;
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+    if (entries.length < 25) {
+      entries.push({
+        at: p.created_at,
+        action: p.action_type,
+        code,
+        step: typeof d.step === "string" ? d.step.slice(0, 40) : undefined,
+        detail: typeof d.detail === "string" ? d.detail.slice(0, 600) : undefined,
+        build: typeof d.build === "string" ? d.build.slice(0, 40) : undefined,
+        selectors: typeof d.selectors === "string" ? d.selectors.slice(0, 20) : undefined,
+      });
+    }
+  }
+  const healthLines: HealthLine[] = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, count]) => {
+      const tr = t(`send.${code}` as Parameters<typeof t>[0]);
+      return { code, count, label: tr.startsWith("send.") ? code : `${tr} (${code})` };
+    });
+  const healthReport = JSON.stringify({ kind: "efi-health", days: 7, counts: Object.fromEntries(counts), latest: entries });
 
   const messageIds = (rows ?? [])
     .map((r) => (r.payload as { message_id?: string } | null)?.message_id)
@@ -86,6 +125,19 @@ export default async function AutopilotPage() {
         <h1 className="text-3xl font-bold">{t("apw.title")}</h1>
         <p className="mt-1 text-slate-400">{t("apw.subtitle")}</p>
       </div>
+
+      <HealthCard
+        lines={healthLines}
+        report={healthReport}
+        labels={{
+          title: t("apw.health.title"),
+          ok: t("apw.health.ok"),
+          issues: t("apw.health.issues"),
+          copy: t("apw.health.copy"),
+          copied: t("apw.health.copied"),
+          help: t("apw.health.help"),
+        }}
+      />
 
       {campaign && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
