@@ -235,7 +235,12 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
     return { kind: "failed", code: "note_too_long" };
   }
 
-  const req = isMessage ? ({ type: "SEND_MESSAGE", text: message.text } as const) : ({ type: "SEND_INVITATION", note: message.text } as const);
+  const req = isMessage ? ({ type: "SEND_MESSAGE", text: message.text } as const) : ({
+        type: "SEND_INVITATION",
+        note: message.text,
+        // Greeting-only note (Settings): if LinkedIn won't take a note, the invitation goes without one.
+        fallbackWithoutNote: settings.invitation_note === "short" || settings.invitation_note === "none",
+      } as const);
   await navigate(tabId, prospect.linkedin_url);
   await sleep(2500 + Math.random() * 2500);
   let res = await sendToTab(tabId, req);
@@ -258,7 +263,7 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
         .update({ status: "invitation_sent", last_action: "invitation_sent", invited_at: new Date().toISOString() })
         .eq("prospect_id", item.prospect_id);
     }
-    await logAction(action, "success", { autopilot: true, campaign_id: item.campaign_id }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
+    await logAction(action, "success", { autopilot: true, campaign_id: item.campaign_id, without_note: res.type === "INVITATION_SENT" && res.withoutNote === true }, { prospect_id: item.prospect_id, linkedin_url: prospect.linkedin_url });
     return { kind: "sent", action, noteLimit: res.type === "INVITATION_SENT" ? res.noteLimit : undefined };
   }
   if (res.ok) return { kind: "failed", code: "unknown" };

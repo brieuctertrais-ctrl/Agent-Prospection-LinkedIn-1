@@ -5,7 +5,7 @@ export type ContentRequest =
   | { type: "PING" }
   | { type: "SCRAPE_PROFILE" }
   | { type: "SCRAPE_SEARCH_RESULTS" }
-  | { type: "SEND_INVITATION"; note: string }
+  | { type: "SEND_INVITATION"; note: string; fallbackWithoutNote?: boolean }
   | { type: "SCRAPE_CONNECTIONS" }
   | { type: "SCRAPE_INBOX" }
   | { type: "FIND_COMPANY_URL" }
@@ -32,7 +32,7 @@ export type ContentResponse =
   | { ok: true; type: "PONG"; url: string }
   | { ok: true; type: "PROFILE"; profile: ScrapedProfile }
   | { ok: true; type: "SEARCH_RESULTS"; urls: string[]; hasNextPage: boolean }
-  | { ok: true; type: "INVITATION_SENT"; noteLimit?: number }
+  | { ok: true; type: "INVITATION_SENT"; noteLimit?: number; withoutNote?: boolean }
   | { ok: true; type: "HEALTH" }
   | { ok: true; type: "CONNECTIONS"; urls: string[] }
   | { ok: true; type: "INBOX"; conversations: { name: string; fromMe: boolean }[] }

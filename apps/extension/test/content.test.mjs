@@ -294,3 +294,44 @@ test("invitation without a note (setting): 'Send without a note' is clicked, nev
     await browser.close();
   }
 });
+
+test("invitation modal variants: editable note box, and Premium upsell with greeting-only fallback", { timeout: 90000 }, async () => {
+  const fixture = readFileSync(new URL("./profile-note-variants.html", import.meta.url), "utf8");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", (r) => {
+      const u = r.request().url();
+      return u.startsWith("https://www.linkedin.com/in/jean-testeur/") ? r.fulfill({ contentType: "text/html; charset=utf-8", body: fixture }) : r.abort();
+    });
+    const open = async (variant) => {
+      await page.goto(`https://www.linkedin.com/in/jean-testeur/?variant=${variant}`, { waitUntil: "domcontentloaded" });
+      await page.addScriptTag({ content: code });
+    };
+    const note = "Bonjour Monsieur Testeur, je serais ravi de vous compter parmi mes relations.";
+
+    // Note field is a contenteditable box: the note is typed and sent.
+    await open("editable");
+    const r1 = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
+    assert.equal(r1.ok, true);
+    assert.equal(await page.evaluate(() => window.__note), note);
+
+    // Premium upsell, no note field, greeting-only note: sent without a note instead.
+    await open("upsell");
+    const r2 = await page.evaluate((n) => window.kairo.sendInvitation(n, { fallbackWithoutNote: true }), note);
+    assert.equal(r2.ok, true);
+    assert.equal(r2.withoutNote, true);
+    assert.equal(await page.evaluate(() => window.__sentWithoutNote ?? false), true);
+
+    // Same page with a personalised note (no fallback allowed): nothing is sent, structural diagnostic returned.
+    await open("upsell");
+    const r3 = await page.evaluate((n) => window.kairo.sendInvitation(n), note);
+    assert.equal(r3.ok, false);
+    assert.equal(r3.code, "textarea_not_found");
+    assert.match(r3.detail, /"premium":true/);
+    assert.doesNotMatch(r3.detail, /Testeur/);
+    assert.equal(await page.evaluate(() => window.__sentWithoutNote ?? false), false);
+  } finally {
+    await browser.close();
+  }
+});

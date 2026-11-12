@@ -71,8 +71,8 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       return { ok: false, code: problem ?? r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
     case "SEND_INVITATION": {
-      const r = await sendInvitation(req.note);
-      if (r.ok) return { ok: true, type: "INVITATION_SENT", noteLimit: r.noteLimit };
+      const r = await sendInvitation(req.note, { fallbackWithoutNote: req.fallbackWithoutNote === true });
+      if (r.ok) return { ok: true, type: "INVITATION_SENT", noteLimit: r.noteLimit, withoutNote: r.withoutNote };
       const structural = ["ui_changed", "connect_not_found", "note_not_found", "textarea_not_found", "send_not_found", "not_pending"];
       const problem = r.code === "ui_changed" && r.detail === "profileName" ? pageProblem() : null;
       return { ok: false, code: problem ?? r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };

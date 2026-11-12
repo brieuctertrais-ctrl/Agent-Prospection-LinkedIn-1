@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Jean Testeur | LinkedIn</title></head><body>
+<!-- Fixture: invitation modal variants. ?variant=editable → note in a contenteditable box;
+     ?variant=upsell → "Add a note" opens a Premium upsell without any note field. -->
+<main>
+  <section>
+    <h1>Jean Testeur</h1>
+    <div>Directeur général chez Exemple</div>
+    <div id="actions"><button aria-label="Inviter Jean Testeur à rejoindre votre réseau" id="connect">Se connecter</button><button>Plus</button></div>
+  </section>
+</main>
+<script>
+  const variant = new URLSearchParams(location.search).get('variant');
+  const pending = () => { document.querySelectorAll('[role=dialog]').forEach((d) => d.remove()); document.getElementById('actions').innerHTML = '<button>En attente</button>'; };
+  document.getElementById('connect').addEventListener('click', () => {
+    const d = document.createElement('div');
+    d.setAttribute('role', 'dialog');
+    d.innerHTML = '<h2>Ajouter une note à votre invitation ?</h2><button id="add">Ajouter une note</button><button id="nonote">Envoyer sans note</button>';
+    document.body.appendChild(d);
+    d.querySelector('#nonote').addEventListener('click', () => { window.__sentWithoutNote = true; pending(); });
+    d.querySelector('#add').addEventListener('click', () => {
+      if (variant === 'upsell') {
+        d.innerHTML = '<h2>Votre invitation</h2><p>Débloquez plus de fonctionnalités avec Premium.</p><button id="close">Ignorer</button>';
+        d.querySelector('#close').addEventListener('click', () => d.remove());
+        return;
+      }
+      d.innerHTML = '<h2>Ajouter une note à votre invitation</h2><div contenteditable="true" role="textbox" style="min-height:40px"></div><span>0/300</span><button id="send" aria-disabled="true">Envoyer</button>';
+      const box = d.querySelector('[contenteditable]'); const send = d.querySelector('#send');
+      box.addEventListener('input', () => { window.__note = box.innerText; send.setAttribute('aria-disabled', box.innerText ? 'false' : 'true'); });
+      send.addEventListener('click', () => { if (send.getAttribute('aria-disabled') === 'false') pending(); });
+    });
+  });
+</script>
+</body></html>

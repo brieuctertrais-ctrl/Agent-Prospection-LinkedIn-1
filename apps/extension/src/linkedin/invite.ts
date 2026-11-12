@@ -3,7 +3,15 @@ import { deepButton, deepQueryAll, dialogMatches, humanPause, isReallyVisible, i
 import { findNameElement, findTopCard, nameFromTitle } from "./topcard";
 import { WARNING_PATTERNS } from "./selectors";
 
-export type InviteResult = { ok: true; noteLimit?: number } | { ok: false; code: SendCode; detail?: string };
+export type InviteResult = { ok: true; noteLimit?: number; withoutNote?: boolean } | { ok: false; code: SendCode; detail?: string };
+
+export interface InviteOptions {
+  /**
+   * The note is only a greeting (Settings: "very short note"): if LinkedIn does not let us add it
+   * (no note field, monthly limit of personalised invitations…), send the invitation without a note.
+   */
+  fallbackWithoutNote?: boolean;
+}
 
 export function detectAccountWarning(): SendCode | null {
   if (/\/checkpoint\//.test(location.pathname) || pageMatches(WARNING_PATTERNS.securityCheck)) return "security_check";
@@ -17,7 +25,7 @@ export function detectAccountWarning(): SendCode | null {
  * An EMPTY note (Settings: "invitations without a note") clicks "Send without a note" instead —
  * the only case where that button is ever used.
  */
-export async function sendInvitation(note: string): Promise<InviteResult> {
+export async function sendInvitation(note: string, opts: InviteOptions = {}): Promise<InviteResult> {
   if ([...note].length > 300) return { ok: false, code: "ui_changed", detail: "note_too_long" };
 
   const warning = detectAccountWarning();
@@ -34,15 +42,7 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
   const reuseNote = reuse ? deepQueryAll<HTMLTextAreaElement>("textarea", reuse).find(isReallyVisible) : undefined;
   if (!reuseNote) {
     // 1. Connect (directly, or through the "More" menu) — always the button of THIS profile.
-    let connect = findConnect(card, name);
-    if (!connect) {
-      const more = findInCard(card, /^(plus|more)$/i, /plus d.actions|more actions/i) ?? query<HTMLElement>("moreButton", card ?? document);
-      if (more) {
-        more.click();
-        await humanPause();
-        connect = await waitFor(() => findMenuConnect(name), 3000);
-      }
-    }
+    const connect = await openConnect(card, name);
     if (!connect) return { ok: false, code: "connect_not_found" };
     connect.click();
     await humanPause();
@@ -69,22 +69,19 @@ export async function sendInvitation(note: string): Promise<InviteResult> {
     await humanPause();
   }
 
-  // 3. Paste the note
-  const textarea = await waitFor(() => {
+  // 3. Paste the note (a textarea, or an editable text box in newer layouts)
+  const field = await waitFor(noteField, 5000);
+  if (!field) {
+    const detail = dialogDiagnostic();
+    if (opts.fallbackWithoutNote) return sendWithoutNoteInstead(name, detail);
     const d = inviteDialog();
-    const t = (d ? deepQueryAll<HTMLTextAreaElement>("textarea", d) : deepQueryAll<HTMLTextAreaElement>("textarea")).find(isReallyVisible);
-    return t ?? query<HTMLTextAreaElement>("noteTextarea");
-  }, 4000);
-  if (!textarea) {
-    const d = inviteDialog();
-    if (d && warningIn(d, WARNING_PATTERNS.noteLimit)) return { ok: false, code: "limit_reached", detail: "note_limit" };
-    return { ok: false, code: "textarea_not_found" };
+    if (d && warningIn(d, WARNING_PATTERNS.noteLimit)) return { ok: false, code: "limit_reached", detail: `note_limit ${detail}` };
+    return { ok: false, code: "textarea_not_found", detail };
   }
   // LinkedIn's own note limit for this account (200 free / 300 Premium): never try to exceed it.
-  const limit = noteLimit(textarea);
+  const limit = noteLimit(field);
   if (limit && [...note].length > limit) return { ok: false, code: "note_too_long", detail: String(limit) };
-  textarea.focus();
-  setNativeValue(textarea, note);
+  writeNote(field, note);
   await humanPause(600, 1500);
 
   // 4. Send (exact labels only)
@@ -108,6 +105,99 @@ async function verifySent(name: string, limit?: number): Promise<InviteResult> {
   if (done === "limit") return { ok: false, code: "limit_reached" };
   if (done !== "pending") return { ok: false, code: "not_pending" };
   return { ok: true, noteLimit: limit };
+}
+
+/** Connect control of this profile, opening the "More" menu if needed. */
+async function openConnect(card: HTMLElement | null, name: string): Promise<HTMLElement | null> {
+  let connect = findConnect(card, name);
+  if (!connect) {
+    const more = findInCard(card, /^(plus|more)$/i, /plus d.actions|more actions/i) ?? query<HTMLElement>("moreButton", card ?? document);
+    if (more) {
+      more.click();
+      await humanPause();
+      connect = await waitFor(() => findMenuConnect(name), 3000);
+    }
+  }
+  return connect;
+}
+
+/** Visible note field of the invitation modal: textarea or contenteditable text box. */
+function noteField(): HTMLElement | null {
+  const d = inviteDialog();
+  const root: ParentNode = d ?? document;
+  const ta = deepQueryAll<HTMLTextAreaElement>("textarea", root).find(isReallyVisible);
+  if (ta) return ta;
+  if (d) {
+    const box = deepQueryAll<HTMLElement>("[contenteditable='true'], [contenteditable=''], [role='textbox']", d).find(isReallyVisible);
+    if (box) return box;
+  }
+  return query<HTMLTextAreaElement>("noteTextarea");
+}
+
+function writeNote(field: HTMLElement, note: string) {
+  field.focus();
+  if (field instanceof HTMLTextAreaElement) {
+    setNativeValue(field, note);
+    return;
+  }
+  // Editable box: select its content and type the note (fires the editor's own input events).
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(field);
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  const typed = document.execCommand?.("insertText", false, note);
+  if (!typed || (field.innerText || "").trim() !== note.trim()) {
+    field.textContent = note;
+    field.dispatchEvent(new InputEvent("input", { bubbles: true, data: note, inputType: "insertText" }));
+  }
+}
+
+/** Structure of the invitation modal when the note field is missing: counts only, no personal data. */
+function dialogDiagnostic(): string {
+  const d = inviteDialog();
+  const dialogs = deepQueryAll<HTMLElement>(DIALOG_SEL).filter(isReallyVisible);
+  const t = d?.innerText ?? "";
+  return JSON.stringify({
+    invite_dialog: Boolean(d),
+    dialogs: dialogs.length,
+    textareas: d ? deepQueryAll("textarea", d).length : 0,
+    editables: d ? deepQueryAll("[contenteditable], [role='textbox']", d).length : 0,
+    buttons: d ? deepQueryAll("button", d).length : 0,
+    premium: /premium/i.test(t),
+    without_note_button: Boolean(d && deepButton(d, SEND_WITHOUT_NOTE)),
+  });
+}
+
+/**
+ * The greeting-only note could not be added: send the invitation without a note instead
+ * ("Send without a note" in the modal, or after reopening it). Only with opts.fallbackWithoutNote.
+ */
+async function sendWithoutNoteInstead(name: string, detail: string): Promise<InviteResult> {
+  let d = inviteDialog();
+  let plain = d ? deepButton(d, SEND_WITHOUT_NOTE) : null;
+  if (!plain) {
+    // Close the modal, reopen it and choose "Send without a note".
+    const close = d ? deepButton(d, CLOSE) : null;
+    if (close) close.click();
+    else document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await humanPause(800, 1500);
+    if (inviteDialog()) return { ok: false, code: "textarea_not_found", detail: `fallback_close ${detail}` };
+    const connect = await openConnect(findTopCard(findNameElement(name)), name);
+    if (!connect) return { ok: false, code: "textarea_not_found", detail: `fallback_connect ${detail}` };
+    connect.click();
+    await humanPause();
+    d = await waitFor(() => inviteDialog(), 6000);
+    if (!d) {
+      const r = await verifySent(name);
+      return r.ok ? { ...r, withoutNote: true } : r;
+    }
+    plain = await waitFor(() => deepButton(inviteDialog() ?? d!, SEND_WITHOUT_NOTE), 4000);
+  }
+  if (!plain) return { ok: false, code: "textarea_not_found", detail: `fallback_button ${detail}` };
+  plain.click();
+  const r = await verifySent(name);
+  return r.ok ? { ...r, withoutNote: true } : r;
 }
 
 const lastName = (name: string) => name.trim().split(/\s+/).slice(-1)[0]?.toLowerCase() ?? "";
@@ -163,6 +253,7 @@ function isPending(card: HTMLElement | null): boolean {
 const DIALOG_SEL = "[role='dialog'], [role='alertdialog'], dialog[open], .artdeco-modal";
 const ADD_NOTE = ["Ajouter une note", "Add a note"];
 const SEND_WITHOUT_NOTE = ["Envoyer sans note", "Send without a note", "Send without note"];
+const CLOSE = ["Ignorer", "Fermer", "Dismiss", "Close", "Annuler", "Cancel"];
 const SEND = ["Envoyer", "Send", "Envoyer l’invitation", "Envoyer l'invitation", "Send invitation", "Send now", "Envoyer maintenant"];
 
 /** The invitation modal (light DOM or shadow DOM), not another overlay such as messaging. */
@@ -180,8 +271,8 @@ function warningIn(root: HTMLElement, patterns: RegExp[]): boolean {
 }
 
 /** Reads the note length limit from the textarea or the "x/200" counter of the invitation modal. */
-function noteLimit(textarea: HTMLTextAreaElement): number | null {
-  if (textarea.maxLength > 0 && textarea.maxLength <= 1000) return textarea.maxLength;
+function noteLimit(field: HTMLElement): number | null {
+  if (field instanceof HTMLTextAreaElement && field.maxLength > 0 && field.maxLength <= 1000) return field.maxLength;
   const d = inviteDialog();
   const m = (d?.innerText ?? "").match(/\b\d{1,3}\s*\/\s*(\d{3})\b/);
   const n = m ? Number(m[1]) : NaN;
