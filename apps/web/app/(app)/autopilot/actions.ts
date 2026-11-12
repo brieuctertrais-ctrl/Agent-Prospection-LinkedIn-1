@@ -60,17 +60,18 @@ export async function cancelQueueItem(queueId: string) {
     .eq("id", id.data)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (item?.action_type === "message" && item.prospect_id) {
-    const { error: stopErr } = await supabase.rpc("stop_sequence", { p_prospects: [item.prospect_id] });
-    if (stopErr) return fail("stop_sequence", stopErr.code);
-  }
+  // Cancel first: the item is cancelled even if stopping the sequence fails below.
   const { error } = await supabase
     .from("action_queue")
     .update({ status: "cancelled", error: "cancelled_by_user" })
     .eq("id", id.data)
     .eq("user_id", user.id)
-    .eq("status", "pending");
+    .in("status", ["pending", "failed"]);
   if (error) return fail("cancel_item", error.code);
+  if (item?.action_type === "message" && item.prospect_id) {
+    const { error: stopErr } = await supabase.rpc("stop_sequence", { p_prospects: [item.prospect_id] });
+    if (stopErr) return fail("stop_sequence", stopErr.code); // e.g. the sequences migration was not run yet
+  }
   revalidatePath("/autopilot");
   return {};
 }

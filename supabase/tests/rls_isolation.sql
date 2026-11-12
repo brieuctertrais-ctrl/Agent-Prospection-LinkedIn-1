@@ -283,3 +283,18 @@ set role anon;
 select pg_temp.expect_error($$select stop_sequence(array['20000000-0000-0000-0000-0000000000a5']::uuid[])$$, 'anon cannot call stop_sequence');
 reset role;
 \echo ALL SEQUENCE TESTS PASSED
+
+-- ===== Cancelled items never come back in a new batch =====
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+insert into prospects (id, user_id, persona_id, linkedin_url, full_name)
+  values ('20000000-0000-0000-0000-0000000000a6', auth.uid(), '10000000-0000-0000-0000-00000000000a', 'https://www.linkedin.com/in/alice6/', 'Alice Six');
+insert into action_queue (id, user_id, prospect_id, action_type, status, payload) values
+  ('70000000-0000-0000-0000-0000000000a6', auth.uid(), '20000000-0000-0000-0000-0000000000a6', 'invitation', 'cancelled', '{"needs_approval": true}');
+select pg_temp.expect((select count(*) from filter_new_profiles(array['https://www.linkedin.com/in/alice6/', 'https://www.linkedin.com/in/brand-new/'])) = 1, 'cancelled invitation not proposed again, new profile still proposed');
+-- B is not affected by A's cancelled item (same URL is new for B)
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((select count(*) from filter_new_profiles(array['https://www.linkedin.com/in/alice6/'])) = 1, 'A cancelled item does not hide the profile from B');
+reset role;
+\echo ALL CANCEL TESTS PASSED
