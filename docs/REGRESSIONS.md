@@ -18,3 +18,4 @@ qui échouerait s'il revenait. Ces tests tournent à chaque modification (GitHub
 | 2026-11-11 | Erreur « webpack moduleId » | Cache du tableau de bord périmé après mise à jour | Cache vidé à chaque démarrage | (`Demarrer-EFI.bat`) |
 | 2026-11-12 | Invitation annulée qui revient au lot suivant | Seules les invitations en attente / envoyées étaient écartées | Tout profil déjà passé par l'autopilote est écarté | SQL « CANCEL TESTS » |
 | 2026-11-12 | 19 invitations « textarea_not_found » | Zone de note absente (nouvelle zone de saisie ou offre Premium) | Zone éditable reconnue ; note « bonjour » → envoi sans note | DOM « invitation modal variants… » |
+| 2026-11-12 | Messages de suivi en « ui_changed » (`page: messaging`) | L'extension lisait la page trop tôt : fin de chargement de la messagerie prise pour celle du profil | Attente du chargement de la NOUVELLE page à la bonne adresse ; aucun envoi hors d'une page de profil | Node `tabs.test.mjs` |

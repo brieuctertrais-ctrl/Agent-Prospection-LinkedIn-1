@@ -2,7 +2,7 @@ import type { ContentRequest, ContentResponse } from "../lib/protocol";
 import { scrapeProfile, scrapeSearchResults } from "../linkedin/scraper";
 import { detectAccountWarning, sendInvitation } from "../linkedin/invite";
 import { sleep } from "../linkedin/dom";
-import { diagnose, pageProblem } from "../linkedin/topcard";
+import { diagnose, pageKind, pageProblem } from "../linkedin/topcard";
 import { scrapeConnections, scrapeInbox, sendMessage } from "../linkedin/messaging";
 import { findCompanyUrl, scrapeCompany } from "../linkedin/company";
 
@@ -64,6 +64,8 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       return { ok: true, type: "COMPANY", ...scrapeCompany() };
     }
     case "SEND_MESSAGE": {
+      // Safety: only ever act on a profile page (never on the messaging page or the feed).
+      if (pageKind() !== "profile") return { ok: false, code: "ui_changed", detail: `wrong_page ${diagnose()}` };
       const r = await sendMessage(req.text);
       if (r.ok) return { ok: true, type: "MESSAGE_SENT" };
       const structural = ["ui_changed", "message_button_not_found", "composer_not_found", "send_not_found", "message_not_sent"];
@@ -71,6 +73,7 @@ async function handle(req: ContentRequest): Promise<ContentResponse> {
       return { ok: false, code: problem ?? r.code, detail: structural.includes(r.code) ? `${r.detail ?? ""} ${diagnose()}`.trim() : r.detail };
     }
     case "SEND_INVITATION": {
+      if (pageKind() !== "profile") return { ok: false, code: "ui_changed", detail: `wrong_page ${diagnose()}` };
       const r = await sendInvitation(req.note, { fallbackWithoutNote: req.fallbackWithoutNote === true });
       if (r.ok) return { ok: true, type: "INVITATION_SENT", noteLimit: r.noteLimit, withoutNote: r.withoutNote };
       const structural = ["ui_changed", "connect_not_found", "note_not_found", "textarea_not_found", "send_not_found", "not_pending"];

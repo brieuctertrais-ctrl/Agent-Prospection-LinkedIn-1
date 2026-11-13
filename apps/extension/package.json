@@ -7,7 +7,7 @@
     "dev": "vite build --watch",
     "build": "vite build && vite build -c vite.content.config.ts",
     "typecheck": "tsc --noEmit",
-    "test:dom": "node --test test/content.test.mjs"
+    "test:dom": "node --test test/content.test.mjs test/tabs.test.mjs"
   },
   "dependencies": {
     "@kairo/shared": "*",

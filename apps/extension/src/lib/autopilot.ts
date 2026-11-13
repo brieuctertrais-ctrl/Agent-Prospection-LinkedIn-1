@@ -246,7 +246,11 @@ export async function sendOne(tabId: number, settings: Settings, noteMax: number
   let res = await sendToTab(tabId, req);
   // The profile was not understood BEFORE anything was clicked (name not found, page not ready):
   // reload once and try again. Never retried after a click (no risk of a double send).
-  if (!res.ok && ((res.code === "ui_changed" && res.detail?.startsWith("profileName")) || res.detail === "content_script_unreachable")) {
+  if (
+    !res.ok &&
+    ((res.code === "ui_changed" && (res.detail?.startsWith("profileName") || res.detail?.startsWith("wrong_page"))) ||
+      res.detail === "content_script_unreachable")
+  ) {
     await sleep(4000 + Math.random() * 3000);
     await navigate(tabId, prospect.linkedin_url);
     await sleep(2500 + Math.random() * 2500);

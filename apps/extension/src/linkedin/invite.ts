@@ -127,8 +127,10 @@ function noteField(): HTMLElement | null {
   const root: ParentNode = d ?? document;
   const ta = deepQueryAll<HTMLTextAreaElement>("textarea", root).find(isReallyVisible);
   if (ta) return ta;
-  if (d) {
-    const box = deepQueryAll<HTMLElement>("[contenteditable='true'], [contenteditable=''], [role='textbox']", d).find(isReallyVisible);
+  // Editable box: inside the invitation modal, or in any modal layer if the modal was re-rendered.
+  const scopes: ParentNode[] = d ? [d] : deepQueryAll<HTMLElement>(DIALOG_SEL).filter(isReallyVisible);
+  for (const scope of scopes) {
+    const box = deepQueryAll<HTMLElement>("[contenteditable='true'], [contenteditable=''], [role='textbox']", scope).find(isReallyVisible);
     if (box) return box;
   }
   return query<HTMLTextAreaElement>("noteTextarea");
@@ -250,7 +252,7 @@ function isPending(card: HTMLElement | null): boolean {
   return Boolean(card && clickables(card).some((el) => /^(en attente|pending)$/i.test(text(el)) || /en attente|pending|retirer l.invitation|withdraw/i.test(el.getAttribute("aria-label") ?? "")));
 }
 
-const DIALOG_SEL = "[role='dialog'], [role='alertdialog'], dialog[open], .artdeco-modal";
+const DIALOG_SEL = "[role='dialog'], [role='alertdialog'], dialog[open], [aria-modal='true'], .artdeco-modal";
 const ADD_NOTE = ["Ajouter une note", "Add a note"];
 const SEND_WITHOUT_NOTE = ["Envoyer sans note", "Send without a note", "Send without note"];
 const CLOSE = ["Ignorer", "Fermer", "Dismiss", "Close", "Annuler", "Cancel"];
